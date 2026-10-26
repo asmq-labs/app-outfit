@@ -22,3 +22,6 @@ backend/storage/
 
 # Third-party test photos (see image_spike/photos/sources.json for where they came from)
 image_spike/photos/*.jpg
+
+# Claude Code settings for this machine only
+.claude/settings.local.json
