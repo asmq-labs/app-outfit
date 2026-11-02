@@ -129,6 +129,22 @@ function GarmentForm({ garment }: { garment: Garment }) {
         <View className="aspect-square overflow-hidden rounded-2xl bg-white">
           <Image source={image} contentFit="contain" style={{ flex: 1 }} transition={150} />
         </View>
+        {/* The main reason to open a garment, so it sits right under its picture. */}
+        <Button
+          size="lg"
+          disabled={buildAround.isPending}
+          onPress={() =>
+            buildAround.mutate(garment.id, { onSuccess: () => router.dismissTo('/') })
+          }>
+          <Text className="font-sans-semibold">
+            {buildAround.isPending ? 'Armando…' : 'Armar un outfit con esta prenda'}
+          </Text>
+        </Button>
+        {buildAround.isError && (
+          <Text className="text-center text-sm text-muted-foreground">
+            Aún no hay prendas suficientes para combinarla.
+          </Text>
+        )}
         <Text className="text-center text-sm text-muted-foreground">{wearSummary(garment)}</Text>
         {/* A basic was never photographed, so there is no original to show. */}
         {!garment.basic_key && (
@@ -213,22 +229,6 @@ function GarmentForm({ garment }: { garment: Garment }) {
           </Button>
         )}
 
-        <Button
-          variant="outline"
-          size="lg"
-          disabled={buildAround.isPending}
-          onPress={() =>
-            buildAround.mutate(garment.id, { onSuccess: () => router.dismissTo('/') })
-          }>
-          <Text className="font-sans-semibold">
-            {buildAround.isPending ? 'Armando…' : 'Armar un outfit con esta prenda'}
-          </Text>
-        </Button>
-        {buildAround.isError && (
-          <Text className="text-center text-sm text-muted-foreground">
-            Aún no hay prendas suficientes para combinarla.
-          </Text>
-        )}
         <Button variant="ghost" onPress={confirmDelete}>
           <Text className="text-destructive">Eliminar prenda</Text>
         </Button>

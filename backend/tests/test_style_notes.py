@@ -2,7 +2,7 @@ import uuid
 
 from app.ai import garments as ai_garments
 from app.ai.openrouter import AIError
-from app.ai.outfits import PROMPT, describe_garment
+from app.ai.outfits import PROMPT, _schema, describe_garment
 from app.garments import style_backfill
 from app.garments.service import describe
 from app.models import Formality, Garment, GarmentCategory, GarmentStatus, Warmth
@@ -62,6 +62,19 @@ def test_the_stylist_sees_style_notes_and_is_asked_to_rank():
 
     assert describe_garment("g1", garment)["style_notes"] == "waffle-knit cotton"
     assert "best to worst" in PROMPT
+
+
+def test_each_slot_only_admits_refs_of_its_own_category():
+    closet = {
+        "g1": Garment(category=GarmentCategory.TOP),
+        "g2": Garment(category=GarmentCategory.SHOES),
+    }
+
+    slots = _schema(closet)["properties"]["outfits"]["items"]["properties"]
+
+    assert slots["top"]["enum"] == ["g1", None]
+    assert slots["shoes"]["enum"] == ["g2", None]
+    assert slots["bottom"]["enum"] == [None]
 
 
 def test_backfill_uses_the_shape_for_basics_and_the_model_for_photos(client, db, monkeypatch):

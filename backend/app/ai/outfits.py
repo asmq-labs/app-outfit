@@ -51,28 +51,36 @@ or textures, like "El beige ilumina y el verde oliva da contraste sin llamar la 
 the weather only when it decided the choice. No empty praise like "un estilo ideal". Talk about \
 the outfit, never describe the person: no adjectives or participles about them such as "cómodo", \
 "protegida" or "abrigado"; use verbs instead ("te protege de la lluvia", "te mantiene a gusto"). \
-No emojis, no garment refs. Mention only garments that are in that outfit."""
+Be honest: if a piece falls short of the occasion because the closet has nothing better, \
+never call it formal or elegant. Use "jean", never "mezclilla" or "denim". No emojis, no garment \
+refs. Mention only garments that are in that outfit."""
 
-_SLOT_SCHEMA = {"type": ["string", "null"]}
-SCHEMA = {
-    "type": "object",
-    "properties": {
-        "outfits": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    **dict.fromkeys(SLOTS, _SLOT_SCHEMA),
-                    "explanation": {"type": "string"},
-                },
-                "required": [*SLOTS, "explanation"],
-                "additionalProperties": False,
-            },
+
+def _schema(by_ref: dict[str, Garment]) -> dict:
+    # Each slot only admits that category's refs: the model sometimes answers with garment names.
+    slots = {
+        category.value: {
+            "type": ["string", "null"],
+            "enum": [*(ref for ref, g in by_ref.items() if g.category == category), None],
         }
-    },
-    "required": ["outfits"],
-    "additionalProperties": False,
-}
+        for category in GarmentCategory
+    }
+    return {
+        "type": "object",
+        "properties": {
+            "outfits": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {**slots, "explanation": {"type": "string"}},
+                    "required": [*SLOTS, "explanation"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+        "required": ["outfits"],
+        "additionalProperties": False,
+    }
 
 
 @dataclass(frozen=True)
@@ -131,7 +139,7 @@ def sugerir_outfits(
         outerwear_rule=_outerwear_rule(candidates),
         seen=json.dumps([sorted(ref_of[i] for i in combo if i in ref_of) for combo in seen]),
     )
-    data = openrouter.chat_json(get_settings().outfit_model, prompt, SCHEMA)
+    data = openrouter.chat_json(get_settings().outfit_model, prompt, _schema(by_ref))
 
     choices = []
     for raw in data.get("outfits", []):
