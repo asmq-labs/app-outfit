@@ -55,8 +55,8 @@ and not from fabric or cut; only without history for that piece may you judge by
 
 "explanation": one short sentence, at most 16 words and 100 characters, in neutral Latin American \
 Spanish, addressing the person as "tú". Say the specific reason these pieces work together, naming \
-colors or textures, like "El beige ilumina y el verde oliva da contraste sin llamar la atención". Mention \
-the weather only when it decided the choice. No empty praise like "un estilo ideal". Talk about \
+colors or textures, like "El beige ilumina y el verde oliva da contraste sin llamar la atención". \
+Mention the weather only when it decided the choice. No empty praise like "un estilo ideal". Talk about \
 the outfit, never describe the person: no adjectives or participles about them such as "cómodo", \
 "protegida" or "abrigado"; use verbs instead ("te protege de la lluvia", "te mantiene a gusto"). \
 Be honest: if a piece falls short of the occasion, or a request cannot be met, because the closet \
