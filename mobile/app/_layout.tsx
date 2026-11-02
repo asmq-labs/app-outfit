@@ -6,6 +6,7 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { ThemeProvider } from 'expo-router/react-navigation';
 import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
 import { useColorScheme } from 'nativewind';
 import * as React from 'react';
 import { View } from 'react-native';
@@ -16,7 +17,7 @@ import { Text } from '@/components/ui/text';
 import { FONTS } from '@/lib/fonts';
 import { queryClient } from '@/lib/query';
 import { startSession, useSession } from '@/lib/session';
-import { NAV_THEME } from '@/lib/theme';
+import { NAV_THEME, THEME } from '@/lib/theme';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -62,6 +63,11 @@ function SessionGate({ children }: { children: React.ReactNode }) {
 export default function RootLayout() {
   const { colorScheme } = useColorScheme();
   const [fontsLoaded] = useFonts(FONTS);
+
+  // What shows behind a screen in transition; left alone it stays white in dark mode.
+  React.useEffect(() => {
+    void SystemUI.setBackgroundColorAsync(THEME[colorScheme ?? 'light'].background);
+  }, [colorScheme]);
 
   // Nothing is drawn until the fonts are ready, so text never jumps between typefaces.
   if (!fontsLoaded) return null;
