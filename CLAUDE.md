@@ -89,6 +89,10 @@ CI=1 npx expo export --platform android --output-dir <carpeta temporal>   # prue
 - Opiniones: pulgar arriba o abajo con motivos opcionales, después de usarlo (y a la mañana
   siguiente) o con el pulgar abajo sobre una sugerencia. Orientan al LLM; el código nunca repite una
   combinación rechazada mientras exista otra. El corazón es otra cosa: guardar.
+- Personalización en capas (`app/outfits/taste.py`): cada acción se anota en `taste_signals`; cada
+  prenda llega al LLM con su historial para esa persona, y las etiquetas (`app/garments/tags.py`,
+  vocabulario cerrado) en las que coinciden varias prendas se vuelven preferencias aprendidas.
+  Clustering y embeddings se montan después sobre estos mismos datos.
 - Ocasión Deporte: usa prendas de formalidad `sport`. Zapatos y chaquetas deportivos también
   sirven en Casual; el resto de la ropa deportiva, no.
 - "Me lo pongo" registra lo usado y evita repetir con un descanso según el tipo de prenda. Sin

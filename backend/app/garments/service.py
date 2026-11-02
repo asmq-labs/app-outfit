@@ -76,6 +76,7 @@ def describe(garment: Garment, item: GarmentAnalysis) -> None:
     garment.warmth = item.warmth
     garment.formality = item.formality
     garment.style_notes = item.style_notes
+    garment.tags = list(item.tags)
 
 
 def list_for_user(db: Session, user: User, status: GarmentStatus | None = None) -> list[Garment]:

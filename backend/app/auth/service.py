@@ -15,6 +15,7 @@ from app.models import (
     Outfit,
     RefreshToken,
     SavedOutfit,
+    TasteSignal,
     User,
 )
 from app.storage import get_storage
@@ -63,6 +64,9 @@ def _merge_guest(db: Session, guest: User, account: User) -> None:
     )
     db.execute(
         update(SavedOutfit).where(SavedOutfit.user_id == guest.id).values(user_id=account.id)
+    )
+    db.execute(
+        update(TasteSignal).where(TasteSignal.user_id == guest.id).values(user_id=account.id)
     )
     db.flush()
     db.delete(guest)

@@ -53,9 +53,9 @@ person, which general style knowledge cannot know. Favor pieces that worked and 
 did not. When they ask for comfort, or for how they feel in something, decide from these counts \
 and not from fabric or cut; only without history for that piece may you judge by its description.
 
-"explanation": one short sentence, at most 16 words and 100 characters, in neutral Latin American Spanish, \
-addressing the person as "tú". Say the specific reason these pieces work together, naming colors \
-or textures, like "El beige ilumina y el verde oliva da contraste sin llamar la atención". Mention \
+"explanation": one short sentence, at most 16 words and 100 characters, in neutral Latin American \
+Spanish, addressing the person as "tú". Say the specific reason these pieces work together, naming \
+colors or textures, like "El beige ilumina y el verde oliva da contraste sin llamar la atención". Mention \
 the weather only when it decided the choice. No empty praise like "un estilo ideal". Talk about \
 the outfit, never describe the person: no adjectives or participles about them such as "cómodo", \
 "protegida" or "abrigado"; use verbs instead ("te protege de la lluvia", "te mantiene a gusto"). \
@@ -64,7 +64,7 @@ has nothing better, get as close as possible and never pretend otherwise; say so
 explanation when it was asked for. Never call such a piece formal or elegant. Use "jean", never \
 "mezclilla" or "denim". No emojis, no garment refs. Mention only garments that are in that \
 outfit. When personal history decided a piece, say so plainly, like "Este jean ya te ha resultado \
-cómodo"."""
+cómodo"; never call a garment "confiable" or describe the person."""
 
 
 # Three lines of the phrase on Hoy: past this it would start pushing the collage away.
@@ -134,7 +134,12 @@ class OutfitChoice:
     explanation: str
 
 
-def _wishes(profile: str | None, note: str | None, feelings: list[dict] | None = None) -> str:
+def _wishes(
+    profile: str | None,
+    note: str | None,
+    feelings: list[dict] | None = None,
+    learned: dict[str, list[str]] | None = None,
+) -> str:
     # JSON-encoded so that what the person typed stays data, not part of the instructions.
     def quoted(text: str) -> str:
         return json.dumps(text, ensure_ascii=False)
@@ -147,6 +152,12 @@ def _wishes(profile: str | None, note: str | None, feelings: list[dict] | None =
             "How earlier outfits felt to them, newest first. Lean toward what worked and away from "
             "what did not; one bad outfit does not ban its pieces: "
             f"{json.dumps(feelings, ensure_ascii=False)}"
+        )
+    if learned:
+        lines.append(
+            "Learned from their feedback, garment tags that tend to go with each feeling. Apply "
+            "them to pieces with no history of their own: "
+            f"{json.dumps(learned, ensure_ascii=False)}"
         )
     if note:
         lines.append(f"What they ask for now, which outranks the above: {quoted(note)}")
@@ -161,9 +172,9 @@ def _describe_weather(forecast: Forecast | None) -> str:
 
 
 def describe_garment(
-    ref: str, garment: Garment, history: dict[str, int] | None = None
-) -> dict[str, str | None | dict[str, int]]:
-    described: dict[str, str | None | dict[str, int]] = {
+    ref: str, garment: Garment, history: dict[str, int] | None = None, with_tags: bool = False
+) -> dict[str, str | None | dict[str, int] | list[str]]:
+    described: dict[str, str | None | dict[str, int] | list[str]] = {
         "ref": ref,
         "category": garment.category.value,
         "name": garment.name,
@@ -174,6 +185,9 @@ def describe_garment(
     }
     if history:
         described["history"] = history
+    # Only useful next to learned tags, so nobody else pays their tokens.
+    if with_tags:
+        described["tags"] = garment.tags
     return described
 
 
@@ -195,6 +209,7 @@ def sugerir_outfits(
     note: str | None = None,
     feelings: list[dict] | None = None,
     history: dict[uuid.UUID, dict[str, int]] | None = None,
+    learned: dict[str, list[str]] | None = None,
 ) -> list[OutfitChoice]:
     # Short refs instead of UUIDs: fewer tokens and no chance of a mistyped id.
     garments = [g for group in candidates.by_category.values() for g in group]
@@ -205,10 +220,10 @@ def sugerir_outfits(
         count=count,
         occasion=OCCASION_DESCRIPTIONS[occasion],
         weather=_describe_weather(forecast),
-        wishes=_wishes(profile, note, feelings),
+        wishes=_wishes(profile, note, feelings, learned),
         garments=json.dumps(
             [
-                describe_garment(ref, garment, (history or {}).get(garment.id))
+                describe_garment(ref, garment, (history or {}).get(garment.id), bool(learned))
                 for ref, garment in by_ref.items()
             ],
             ensure_ascii=False,

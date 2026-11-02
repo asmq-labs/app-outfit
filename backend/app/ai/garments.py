@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from app.ai import openrouter
 from app.config import get_settings
+from app.garments.tags import ALL_TAGS, TAGS_RULE, clean_tags
 from app.models import Formality, GarmentCategory, Warmth
 
 STYLE_NOTES_RULE = (
@@ -34,6 +35,7 @@ ANALYZE_PROMPT = (
     "leggings, gym shorts, sports bras, jerseys, tracksuits, running shoes, technical fabrics; "
     "everyday sneakers and plain t-shirts are casual).\n"
     f"- style_notes: {STYLE_NOTES_RULE}\n"
+    f"- {TAGS_RULE}\n"
     "- description: a short English phrase that tells this item apart from the others in the "
     "photo by its look and position, e.g. 'the grey t-shirt with a logo, on the left'."
 )
@@ -47,9 +49,19 @@ ITEM_SCHEMA = {
         "warmth": {"type": "string", "enum": [w.value for w in Warmth]},
         "formality": {"type": "string", "enum": [f.value for f in Formality]},
         "style_notes": {"type": "string"},
+        "tags": {"type": "array", "items": {"type": "string", "enum": ALL_TAGS}},
         "description": {"type": "string"},
     },
-    "required": ["category", "name", "color", "warmth", "formality", "style_notes", "description"],
+    "required": [
+        "category",
+        "name",
+        "color",
+        "warmth",
+        "formality",
+        "style_notes",
+        "tags",
+        "description",
+    ],
     "additionalProperties": False,
 }
 
@@ -100,6 +112,7 @@ class GarmentAnalysis:
     # Tells this item apart when the photo shows several.
     description: str
     style_notes: str | None = None
+    tags: tuple[str, ...] = ()
 
 
 def analizar_prenda(photo: bytes) -> list[GarmentAnalysis]:
@@ -116,6 +129,7 @@ def analizar_prenda(photo: bytes) -> list[GarmentAnalysis]:
                 formality=Formality(item["formality"]),
                 description=str(item["description"])[:200],
                 style_notes=str(item["style_notes"])[:200],
+                tags=tuple(clean_tags(item.get("tags", []))),
             )
             for item in data["items"]
         ]

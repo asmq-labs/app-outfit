@@ -1,4 +1,3 @@
-import collections
 import datetime as dt
 import logging
 import uuid
@@ -16,8 +15,10 @@ from app.models import (
     Occasion,
     Outfit,
     SavedOutfit,
+    SignalKind,
     User,
 )
+from app.outfits import taste
 from app.outfits.candidates import Candidates, select_candidates
 from app.outfits.weather import Forecast
 
@@ -30,32 +31,9 @@ PLANNED_EXPLANATION = "El outfit que planeaste para hoy."
 SAVED_EXPLANATION = "Uno de tus outfits guardados."
 SWAPPED_EXPLANATION = "Tu versión de este outfit, con el cambio que elegiste."
 
-# What each reason means, in the words the model reads. The phone shows its own labels.
-REASONS: dict[Feeling, dict[str, str]] = {
-    Feeling.GOOD: {
-        "comfortable": "comfortable",
-        "looks_good": "they liked how they looked",
-        "confident": "made them feel confident",
-        "right_occasion": "right for the occasion",
-        "right_weather": "right for the weather",
-        "colors": "they liked the colors",
-    },
-    Feeling.BAD: {
-        "uncomfortable": "uncomfortable",
-        "not_my_style": "not their style",
-        "bad_match": "the pieces did not go together",
-        "wrong_occasion": "wrong for the occasion",
-        "too_hot": "too hot",
-        "too_cold": "too cold",
-        "bad_fit": "something did not fit them well",
-    },
-}
-# About how pieces work together, so they say nothing of a piece unless the person pointed at it.
 ABOUT_THE_COMBINATION = {"bad_match", "colors", "right_occasion", "wrong_occasion"}
 # Enough to show a taste without making every prompt long.
 FEELINGS_IN_PROMPT = 10
-# What each garment has earned goes back further, since it travels as a few short counts.
-FEELINGS_REMEMBERED = 300
 
 Combo = frozenset[uuid.UUID]
 
@@ -141,35 +119,11 @@ def _recent_feelings(db: Session, user: User) -> list[dict]:
         feelings.append(
             {
                 "felt": outfit.feeling.value,
-                "reasons": [REASONS[outfit.feeling][r] for r in outfit.feeling_reasons],
+                "reasons": [taste.REASONS[outfit.feeling][r] for r in outfit.feeling_reasons],
                 "garments": sorted(g.name for g in garments if g is not None and g.name),
             }
         )
     return feelings
-
-
-def _garment_history(db: Session, user: User) -> dict[uuid.UUID, dict[str, int]]:
-    # Comfort is personal: each garment carries how it has felt to this one person.
-    history: dict[uuid.UUID, collections.Counter[str]] = collections.defaultdict(
-        collections.Counter
-    )
-    outfits = db.scalars(
-        _with_feeling(user).order_by(Outfit.felt_at.desc()).limit(FEELINGS_REMEMBERED)
-    )
-    for outfit in outfits:
-        pointed = {uuid.UUID(garment_id) for garment_id in outfit.feeling_garment_ids}
-        reasons = [
-            REASONS[outfit.feeling][reason]
-            for reason in outfit.feeling_reasons
-            if pointed or reason not in ABOUT_THE_COMBINATION
-        ]
-        words = reasons or ["liked" if outfit.feeling == Feeling.GOOD else "disliked"]
-        for garment_id in pointed or _combo(outfit.garment_ids()):
-            history[garment_id].update(words)
-    for saved in _saved_of(db, user.id):
-        for garment_id in _combo(saved.garment_ids()):
-            history[garment_id]["kept in a saved outfit"] += 1
-    return {garment_id: dict(counts) for garment_id, counts in history.items()}
 
 
 def _disliked(db: Session, user: User) -> set[Combo]:
@@ -212,7 +166,8 @@ def _generate(
             profile=user.style_profile,
             note=note,
             feelings=_recent_feelings(db, user),
-            history=_garment_history(db, user),
+            history=taste.garment_history(db, user),
+            learned=taste.learned_tags(db, user, garments),
         )
     except AIError as exc:
         logger.warning("outfit model failed, using the fallback: %s", exc)
@@ -411,6 +366,7 @@ def another(db: Session, user: User, outfit: Outfit, forecast: Forecast | None) 
             note=outfit.request_note,
         )[0]
     outfit.dismissed_at = dt.datetime.now(dt.UTC)
+    taste.record(db, outfit, SignalKind.SKIPPED)
     db.commit()
     return replacement
 
@@ -426,6 +382,9 @@ def swap_garments(
         return outfit
     # The original steps aside and stays on record, so "Otra" does not bring it right back.
     outfit.dismissed_at = dt.datetime.now(dt.UTC)
+    before = _combo(outfit.garment_ids())
+    taste.record(db, outfit, SignalKind.SWAPPED_OUT, before - combo)
+    taste.record(db, outfit, SignalKind.SWAPPED_IN, combo - before)
     replacement = Outfit(
         user_id=user.id,
         day=outfit.day,
@@ -452,13 +411,15 @@ def set_feeling(
     if feeling is None:
         reasons, garment_ids = [], []
     elif not (
-        set(reasons) <= set(REASONS[feeling]) and set(garment_ids) <= _combo(outfit.garment_ids())
+        set(reasons) <= set(taste.REASONS[feeling])
+        and set(garment_ids) <= _combo(outfit.garment_ids())
     ):
         raise InvalidFeelingError
     outfit.feeling = feeling
     outfit.feeling_reasons = reasons
     outfit.feeling_garment_ids = [str(garment_id) for garment_id in garment_ids]
     outfit.felt_at = dt.datetime.now(dt.UTC) if feeling else None
+    taste.record_feeling(db, outfit)
     db.commit()
     return outfit
 
@@ -492,6 +453,7 @@ def wear(db: Session, outfit: Outfit) -> Outfit:
     if outfit.worn_at is None:
         outfit.worn_at = dt.datetime.now(dt.UTC)
         outfit.planned = False
+        taste.record(db, outfit, SignalKind.WORN)
         _refresh_wear(db, set(_combo(outfit.garment_ids())))
         db.commit()
     return outfit
@@ -504,6 +466,7 @@ def unwear(db: Session, outfit: Outfit) -> Outfit:
         # An opinion about wearing it does not outlive taking the wear back.
         outfit.feeling, outfit.feeling_reasons, outfit.felt_at = None, [], None
         outfit.feeling_garment_ids = []
+        taste.forget(db, outfit, SignalKind.WORN, SignalKind.FELT)
         _refresh_wear(db, set(_combo(outfit.garment_ids())))
         db.commit()
     return outfit
@@ -554,7 +517,10 @@ def create_manual(
         **{f"{category.value}_id": gid for category, gid in garment_ids.items()},
     )
     db.add(outfit)
+    db.flush()
+    taste.record(db, outfit, SignalKind.HAND_PICKED)
     if worn:
+        taste.record(db, outfit, SignalKind.WORN)
         # A day logged afterwards counts at noon of that day, not at the moment it was logged.
         today = dt.datetime.now(dt.UTC).date()
         outfit.worn_at = (
@@ -588,6 +554,8 @@ def list_calendar(db: Session, user: User, start: dt.date, end: dt.date) -> list
 def delete(db: Session, outfit: Outfit) -> None:
     garment_ids = set(_combo(outfit.garment_ids()))
     was_worn = outfit.worn_at is not None
+    # Removing a record says it should not count, unlike losing it to a deleted garment.
+    taste.forget(db, outfit)
     db.delete(outfit)
     if was_worn:
         _refresh_wear(db, garment_ids)

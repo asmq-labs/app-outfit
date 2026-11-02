@@ -3,7 +3,8 @@ import uuid
 import zlib
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -51,6 +52,8 @@ def text_enum(enum_class: type[enum.StrEnum]) -> Enum:
 
 class Garment(Base):
     __tablename__ = "garments"
+    # Finds "every garment with this tag" as closets grow.
+    __table_args__ = (Index("ix_garments_tags", "tags", postgresql_using="gin"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -68,6 +71,8 @@ class Garment(Base):
     formality: Mapped[Formality | None] = mapped_column(text_enum(Formality))
     # What a stylist would notice in the photo: fabric, texture, fit, pattern, visual weight.
     style_notes: Mapped[str | None] = mapped_column(String(200))
+    # From the closed vocabulary in app/garments/tags.py.
+    tags: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
     # Optional details only the user knows; never required to get an outfit.
     brand: Mapped[str | None] = mapped_column(String(60))
     size: Mapped[str | None] = mapped_column(String(20))

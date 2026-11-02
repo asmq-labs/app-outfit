@@ -2,6 +2,7 @@ from app.models.garment import Formality, Garment, GarmentCategory, GarmentStatu
 from app.models.inspiration import Inspiration, InspirationStatus
 from app.models.job import Job, JobStatus
 from app.models.outfit import Feeling, Occasion, Outfit, SavedOutfit
+from app.models.taste import SignalKind, TasteSignal
 from app.models.user import AuthIdentity, RefreshToken, User
 
 __all__ = [
@@ -19,6 +20,8 @@ __all__ = [
     "Outfit",
     "RefreshToken",
     "SavedOutfit",
+    "SignalKind",
+    "TasteSignal",
     "User",
     "Warmth",
 ]

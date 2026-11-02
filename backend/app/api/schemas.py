@@ -62,6 +62,7 @@ class GarmentOut(BaseModel):
     color: str | None
     warmth: Warmth | None
     formality: Formality | None
+    tags: list[str]
     brand: str | None
     size: str | None
     notes: str | None

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.garments import crear_basico
 from app.garments.images import normalize_catalog_image
+from app.garments.tags import BASIC_TAGS
 from app.models import Formality, Garment, GarmentCategory, GarmentStatus, User, Warmth
 from app.storage import Storage
 
@@ -228,6 +229,7 @@ def add_to_closet(db: Session, storage: Storage, user: User, keys: list[str]) ->
             warmth=shape.warmth,
             formality=shape.formality,
             style_notes=shape.description,
+            tags=BASIC_TAGS[shape.key],
             original_path=path,
             image_path=path,
         )

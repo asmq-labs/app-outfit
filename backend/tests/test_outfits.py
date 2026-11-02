@@ -673,6 +673,7 @@ def asks(monkeypatch):
         note=None,
         feelings=None,
         history=None,
+        learned=None,
     ):
         received.append(
             {
@@ -680,6 +681,7 @@ def asks(monkeypatch):
                 "note": note,
                 "feelings": feelings,
                 "history": history,
+                "learned": learned,
                 "tops": candidates.by_category,
             }
         )

@@ -149,8 +149,8 @@ def _suggest(candidates, occasion, forecast, *, prompt, notes, model, storage=No
     settings.outfit_model = model
     if not notes:
 
-        def without_notes(ref, garment, history=None):
-            described = real_describe(ref, garment, history)
+        def without_notes(ref, garment, *args):
+            described = real_describe(ref, garment, *args)
             return {k: v for k, v in described.items() if k != "style_notes"}
 
         ai.describe_garment = without_notes
