@@ -80,7 +80,10 @@ CI=1 npx expo export --platform android --output-dir <carpeta temporal>   # prue
   zapatos obligatorios, un accesorio opcional. Fuera: joyería, cinturones, medias, ropa interior.
 - Se dibuja como collage con zonas fijas. En modo oscuro el lienzo del collage sigue claro.
 - Dos pasos: el código filtra candidatos (clima, ocasión, usado hace poco) y el LLM elige y
-  escribe una explicación breve. Ocasión por chips, preseleccionada según día y hora.
+  escribe una explicación breve. Ocasión por chips, preseleccionada según día y hora. La hoja de
+  pedido (`/outfit-request`) añade ocasión e indicaciones opcionales en lenguaje natural, desde Hoy
+  o desde una prenda, y "Tu estilo" guarda gustos en texto libre: orientan al LLM, nunca cambian
+  las reglas del código. Sin preguntas ni género obligatorios al empezar.
 - "Me lo pongo" registra lo usado y evita repetir con un descanso según el tipo de prenda. Sin
   lavandería. Abrigo por niveles (ligero, medio, abrigado), no por temporada.
 - Login solo con Google y Apple. Modo claro y oscuro según el sistema.

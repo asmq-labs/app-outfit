@@ -2,7 +2,7 @@ import datetime as dt
 import enum
 import uuid
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Text, func
+from sqlalchemy import Date, DateTime, ForeignKey, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -40,6 +40,9 @@ class Outfit(Base):
     accessory_id: Mapped[uuid.UUID | None] = garment_slot()
 
     explanation: Mapped[str] = mapped_column(Text)
+    # What this outfit was asked for, so "Otra" keeps honoring it.
+    request_note: Mapped[str | None] = mapped_column(String(200))
+    anchor_garment_id: Mapped[uuid.UUID | None] = garment_slot()
     # Chosen by the user ahead of time rather than suggested by the app.
     planned: Mapped[bool] = mapped_column(default=False, server_default="false")
     dismissed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))

@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.schemas import ForecastOut, GarmentOut, OutfitIn, OutfitOut
+from app.api.schemas import ForecastOut, GarmentOut, OutfitIn, OutfitOut, OutfitRequestIn
 from app.auth.deps import CurrentUser, DbSession
 from app.garments import service as garment_service
 from app.models import Garment, GarmentCategory, Occasion, Outfit
@@ -87,20 +87,23 @@ def read_today(
     return _outfit_out(db, outfit, forecast)
 
 
-@router.post("/around/{garment_id}")
-def build_around_garment(
-    garment_id: uuid.UUID,
-    day: dt.date,
-    occasion: Occasion,
+@router.post("/request")
+def request_outfit(
+    body: OutfitRequestIn,
     user: CurrentUser,
     db: DbSession,
     lat: Latitude = None,
     lon: Longitude = None,
 ) -> OutfitOut:
-    forecast = _forecast(day, lat, lon)
+    forecast = _forecast(body.day, lat, lon)
+    note = body.note.strip() if body.note else None
     try:
-        garment = garment_service.get_for_user(db, user, garment_id)
-        outfit = service.build_around(db, user, garment, day, occasion, forecast)
+        garment = (
+            garment_service.get_for_user(db, user, body.garment_id) if body.garment_id else None
+        )
+        outfit = service.request_outfit(
+            db, user, body.day, body.occasion, forecast, garment=garment, note=note or None
+        )
     except garment_service.GarmentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "garment_not_found") from exc
     except service.GarmentNotReadyError as exc:

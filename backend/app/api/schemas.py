@@ -21,6 +21,18 @@ class UserOut(BaseModel):
     email: str | None
     display_name: str | None
     is_guest: bool
+    style_profile: str | None
+
+
+class StyleProfileIn(BaseModel):
+    style_profile: str = Field(max_length=300)
+
+
+class OutfitRequestIn(BaseModel):
+    day: dt.date
+    occasion: Occasion
+    garment_id: uuid.UUID | None = None
+    note: str | None = Field(default=None, max_length=200)
 
 
 class SessionOut(BaseModel):

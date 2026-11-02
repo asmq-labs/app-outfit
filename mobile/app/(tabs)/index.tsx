@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { CheckIcon, RefreshCwIcon } from 'lucide-react-native';
 import * as React from 'react';
 import { View } from 'react-native';
@@ -95,7 +96,8 @@ export default function TodayScreen() {
 
   return (
     <View className="flex-1 bg-background">
-      <TodayHeader forecast={outfit?.forecast ?? null} />
+      {/* "Tu estilo" appears once there is an outfit it can improve, never before the first one. */}
+      <TodayHeader forecast={outfit?.forecast ?? null} showStyle={Boolean(outfit)} />
       <View className="flex-1 gap-4 px-4 pb-4">
         {/* Occasions mean nothing until the closet can make an outfit. */}
         {!needsGarments && (
@@ -172,6 +174,16 @@ export default function TodayScreen() {
                   <Text className="font-sans-semibold">Me lo pongo</Text>
                 </Button>
               </View>
+            )}
+            {!outfit.worn && (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                className="-mb-2 -mt-2 self-center"
+                onPress={() => router.push('/outfit-request')}>
+                <Text className="font-sans-medium text-muted-foreground">Pedir algo distinto</Text>
+              </Button>
             )}
           </>
         ) : needsGarments ? (

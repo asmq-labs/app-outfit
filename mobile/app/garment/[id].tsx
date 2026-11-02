@@ -24,8 +24,6 @@ import {
   WARMTH_OPTIONS,
 } from '@/lib/garments';
 import { successFeedback } from '@/lib/haptics';
-import { useCoords } from '@/lib/location';
-import { useBuildAroundGarment } from '@/lib/outfits';
 
 function Field({ label, children }: React.PropsWithChildren<{ label: string }>) {
   return (
@@ -52,7 +50,6 @@ function GarmentForm({ garment }: { garment: Garment }) {
   const image = useGarmentImage(garment, { variant: showOriginal ? 'original' : undefined });
   const update = useUpdateGarment();
   const remove = useDeleteGarment();
-  const buildAround = useBuildAroundGarment(useCoords());
   const [form, setForm] = React.useState<GarmentEdit>({
     name: garment.name ?? '',
     category: garment.category,
@@ -132,19 +129,14 @@ function GarmentForm({ garment }: { garment: Garment }) {
         {/* The main reason to open a garment, so it sits right under its picture. */}
         <Button
           size="lg"
-          disabled={buildAround.isPending}
           onPress={() =>
-            buildAround.mutate(garment.id, { onSuccess: () => router.dismissTo('/') })
+            router.push({
+              pathname: '/outfit-request',
+              params: { garmentId: garment.id, garmentName: garment.name ?? '' },
+            })
           }>
-          <Text className="font-sans-semibold">
-            {buildAround.isPending ? 'Armando…' : 'Armar un outfit con esta prenda'}
-          </Text>
+          <Text className="font-sans-semibold">Armar un outfit con esta prenda</Text>
         </Button>
-        {buildAround.isError && (
-          <Text className="text-center text-sm text-muted-foreground">
-            Aún no hay prendas suficientes para combinarla.
-          </Text>
-        )}
         <Text className="text-center text-sm text-muted-foreground">{wearSummary(garment)}</Text>
         {/* A basic was never photographed, so there is no original to show. */}
         {!garment.basic_key && (

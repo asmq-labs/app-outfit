@@ -109,14 +109,20 @@ export function useAnotherOutfit(coords: Coords | null | undefined) {
   });
 }
 
-export function useBuildAroundGarment(coords: Coords | null | undefined) {
+export type OutfitAsk = { garmentId?: string; occasion: Occasion; note: string };
+
+export function useRequestOutfit(coords: Coords | null | undefined) {
   return useMutation({
-    mutationFn: (garmentId: string) => {
-      const { occasion } = useOccasion.getState();
-      const query = `day=${localDay()}&occasion=${occasion}${coordsQuery(coords)}`;
-      return api<Outfit>(`/outfits/around/${garmentId}?${query}`, { method: 'POST' });
+    mutationFn: ({ garmentId, occasion, note }: OutfitAsk) =>
+      api<Outfit>(
+        `/outfits/request?${coordsQuery(coords).slice(1)}`,
+        jsonBody('POST', { day: localDay(), occasion, garment_id: garmentId, note })
+      ),
+    onSuccess: (outfit) => {
+      queryClient.setQueryData(todayKey(outfit.occasion, outfit.day), outfit);
+      // Hoy lands on the occasion just asked for, with the new outfit already there.
+      useOccasion.getState().setOccasion(outfit.occasion);
     },
-    onSuccess: (outfit) => queryClient.setQueryData(todayKey(outfit.occasion, outfit.day), outfit),
   });
 }
 

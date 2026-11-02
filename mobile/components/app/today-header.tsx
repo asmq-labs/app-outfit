@@ -1,5 +1,6 @@
-import { CloudRainIcon, CloudSunIcon, SunIcon } from 'lucide-react-native';
-import { View } from 'react-native';
+import { router } from 'expo-router';
+import { CloudRainIcon, CloudSunIcon, SunIcon, UserRoundIcon } from 'lucide-react-native';
+import { Pressable, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -39,7 +40,13 @@ function Weather({ forecast }: { forecast: NonNullable<Outfit['forecast']> }) {
   );
 }
 
-export function TodayHeader({ forecast }: { forecast: Outfit['forecast'] }) {
+export function TodayHeader({
+  forecast,
+  showStyle,
+}: {
+  forecast: Outfit['forecast'];
+  showStyle: boolean;
+}) {
   const insets = useSafeAreaInsets();
   // Guests have no name until they sign in with Google or Apple.
   const firstName = useSession((state) => state.user?.display_name?.split(' ')[0]);
@@ -47,7 +54,19 @@ export function TodayHeader({ forecast }: { forecast: Outfit['forecast'] }) {
   return (
     <View className="gap-2 px-4 pb-3" style={{ paddingTop: insets.top + 12 }}>
       <View>
-        <Text className="text-sm text-muted-foreground">{dateLabel()}</Text>
+        <View className="flex-row items-center justify-between">
+          <Text className="text-sm text-muted-foreground">{dateLabel()}</Text>
+          {showStyle && (
+            <Pressable
+              accessibilityRole="button"
+              hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+              className="flex-row items-center gap-1.5 active:opacity-60"
+              onPress={() => router.push('/style-profile')}>
+              <Icon as={UserRoundIcon} size={15} className="text-muted-foreground" />
+              <Text className="font-sans-medium text-sm text-muted-foreground">Tu estilo</Text>
+            </Pressable>
+          )}
+        </View>
         <Text numberOfLines={1} className="font-serif-medium text-4xl leading-tight">
           {firstName ? `${greeting()}, ${firstName}` : greeting()}
         </Text>

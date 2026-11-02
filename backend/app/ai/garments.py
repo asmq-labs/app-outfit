@@ -7,8 +7,9 @@ from app.models import Formality, GarmentCategory, Warmth
 STYLE_NOTES_RULE = (
     "what a stylist would notice, as one short English phrase under 25 words: fabric and texture, "
     "fit or cut, pattern or print, and visual weight, e.g. 'waffle-knit cotton, relaxed boxy fit, "
-    "solid, understated' or 'distressed denim, slim, rugged'. Only what is visible; if the fit "
-    "cannot be seen, leave it out."
+    "solid, understated' or 'distressed denim, slim, rugged'. Describe the garment itself, never "
+    "how it lies in the photo (no 'folded', 'wrinkled' or 'hanging'). Only what is visible; if the "
+    "fit cannot be seen, leave it out."
 )
 
 ANALYZE_PROMPT = (
@@ -22,7 +23,8 @@ ANALYZE_PROMPT = (
     "bottom (pants, jeans, shorts, skirts), one_piece (dresses, jumpsuits), outerwear (jackets, "
     "coats, hoodies, cardigans worn over a top), shoes, accessory (bags, caps, hats, scarves).\n"
     "- name: a short label in neutral Latin American Spanish, 2 to 5 words, lowercase except the "
-    "first letter, e.g. 'Camiseta gris con logo'. Use words that are natural in Ecuador and "
+    "first letter, always with its color, e.g. 'Camiseta gris con logo', 'Pantalón verde oliva'. "
+    "Use words that are natural in Ecuador and "
     "understood everywhere: 'jean' (never 'mezclilla' or 'vaqueros'), 'camiseta' (never 'playera' "
     "or 'remera'), 'chaqueta' (never 'chamarra' or 'campera'), 'suéter', 'zapatos deportivos' "
     "(never 'tenis' or 'zapatillas'). Do not include brand names.\n"

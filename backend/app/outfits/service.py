@@ -98,6 +98,9 @@ def _generate(
     forecast: Forecast | None,
     existing: list[Outfit],
     around: Garment | None = None,
+    note: str | None = None,
+    # A direct request answers with what fits it, even if it was already shown today.
+    fresh: bool = False,
 ) -> list[Outfit]:
     garments = list(
         db.scalars(
@@ -110,12 +113,20 @@ def _generate(
     if candidates.missing:
         raise NotEnoughGarmentsError(candidates.missing)
 
-    seen = {_combo(outfit.garment_ids()) for outfit in existing}
+    seen = set() if fresh else {_combo(outfit.garment_ids()) for outfit in existing}
     try:
-        choices = sugerir_outfits(candidates, occasion, forecast, list(seen), BATCH_SIZE)
+        choices = sugerir_outfits(
+            candidates,
+            occasion,
+            forecast,
+            list(seen),
+            BATCH_SIZE,
+            profile=user.style_profile,
+            note=note,
+        )
     except AIError:
         choices = []
-    if not existing or around is not None:
+    if not existing or around is not None or fresh:
         # The first outfit of the day, or one asked for, must never fail because of the model.
         choices.append(_fallback_choice(candidates))
 
@@ -133,6 +144,8 @@ def _generate(
                 occasion=occasion,
                 position=len(existing) + len(outfits),
                 explanation=choice.explanation or FALLBACK_EXPLANATION,
+                request_note=note,
+                anchor_garment_id=around.id if around else None,
                 **slots,
             )
         )
@@ -162,21 +175,25 @@ def get_today(
     for outfit in existing:
         if _is_available(outfit):
             return outfit
-    return _generate(db, user, day, occasion, forecast, existing)[0]
+    # Hoy always shows something: with nothing left, a combination seen earlier is fine again.
+    return _generate(db, user, day, occasion, forecast, existing, fresh=True)[0]
 
 
-def build_around(
+def request_outfit(
     db: Session,
     user: User,
-    garment: Garment,
     day: dt.date,
     occasion: Occasion,
     forecast: Forecast | None,
+    garment: Garment | None = None,
+    note: str | None = None,
 ) -> Outfit:
-    if garment.status != GarmentStatus.READY:
+    if garment is not None and garment.status != GarmentStatus.READY:
         raise GarmentNotReadyError
     existing = _for_day(db, user, day, occasion)
-    outfits = _generate(db, user, day, occasion, forecast, existing, around=garment)
+    outfits = _generate(
+        db, user, day, occasion, forecast, existing, around=garment, note=note, fresh=True
+    )
     # What was on screen steps aside so the requested outfit is the one shown.
     now = dt.datetime.now(dt.UTC)
     for outfit in existing:
@@ -243,6 +260,25 @@ def use_look(
     return outfit
 
 
+def set_style_profile(db: Session, user: User, profile: str | None) -> None:
+    user.style_profile = profile
+    # Outfits prepared under the old profile step aside, so the change shows on the next look.
+    since = dt.datetime.now(dt.UTC).date() - dt.timedelta(days=1)
+    pending = db.scalars(
+        select(Outfit).where(
+            Outfit.user_id == user.id,
+            Outfit.day >= since,
+            Outfit.worn_at.is_(None),
+            Outfit.dismissed_at.is_(None),
+            Outfit.planned.is_(False),
+        )
+    )
+    now = dt.datetime.now(dt.UTC)
+    for outfit in pending:
+        outfit.dismissed_at = now
+    db.commit()
+
+
 def list_worn(db: Session, user: User, limit: int) -> list[Outfit]:
     return list(
         db.scalars(
@@ -265,11 +301,20 @@ def another(db: Session, user: User, outfit: Outfit, forecast: Forecast | None) 
     existing = _for_day(db, user, outfit.day, outfit.occasion)
     ready = [other for other in existing if other.id != outfit.id and _is_available(other)]
     # The current outfit is only dismissed once there is something to replace it.
-    replacement = (
-        ready[0]
-        if ready
-        else _generate(db, user, outfit.day, outfit.occasion, forecast, existing)[0]
-    )
+    if ready:
+        replacement = ready[0]
+    else:
+        anchor = db.get(Garment, outfit.anchor_garment_id) if outfit.anchor_garment_id else None
+        replacement = _generate(
+            db,
+            user,
+            outfit.day,
+            outfit.occasion,
+            forecast,
+            existing,
+            around=anchor,
+            note=outfit.request_note,
+        )[0]
     outfit.dismissed_at = dt.datetime.now(dt.UTC)
     db.commit()
     return replacement

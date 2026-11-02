@@ -24,7 +24,7 @@ from app.ai import openrouter
 from app.ai import outfits as ai
 from app.config import get_settings
 from app.db import SessionLocal
-from app.models import Garment, GarmentCategory, GarmentStatus, Occasion
+from app.models import Garment, GarmentCategory, GarmentStatus, Occasion, User
 from app.outfits.candidates import select_candidates
 from app.outfits.service import BATCH_SIZE, _is_wearable
 from app.outfits.weather import Forecast
@@ -99,7 +99,48 @@ def _montage(storage, garments: list[Garment]) -> bytes:
     return buffer.getvalue()
 
 
-def _suggest(candidates, occasion, forecast, *, prompt, notes, model, storage=None):
+REVIEW_PROMPT = """You are a demanding head stylist reviewing outfits a junior proposed for \
+{occasion}. Weather: {weather}. About the person: {profile}
+
+Proposals (JSON): {proposals}
+
+Pick the one a well-dressed person would most want to wear, judging formality coherence, color \
+contrast on a neutral base, at most one protagonist piece, similar visual weight, and shoes that \
+finish the outfit. Return its index, starting at 0."""
+
+REVIEW_SCHEMA = {
+    "type": "object",
+    "properties": {"best": {"type": "integer"}},
+    "required": ["best"],
+    "additionalProperties": False,
+}
+
+
+def _review(choices, garments, occasion, forecast, profile, model):
+    # Second pass under test: is a reviewer worth its extra call and wait?
+    by_id = {g.id: g for g in garments}
+    proposals = [
+        {
+            "index": index,
+            "pieces": [ai.describe_garment("", by_id[g]) for g in c.garment_ids.values() if g],
+        }
+        for index, c in enumerate(choices)
+    ]
+    data = openrouter.chat_json(
+        model,
+        REVIEW_PROMPT.format(
+            occasion=ai.OCCASION_DESCRIPTIONS[occasion],
+            weather=ai._describe_weather(forecast),
+            profile=json.dumps(profile, ensure_ascii=False),
+            proposals=json.dumps(proposals, ensure_ascii=False),
+        ),
+        REVIEW_SCHEMA,
+    )
+    best = data.get("best", 0)
+    return [choices[best]] if 0 <= best < len(choices) else choices
+
+
+def _suggest(candidates, occasion, forecast, *, prompt, notes, model, storage=None, profile=None):
     # Patches instead of parameters, so production code carries nothing for this experiment.
     settings = get_settings()
     saved = ai.PROMPT, ai.describe_garment, settings.outfit_model, openrouter.chat_json
@@ -118,7 +159,9 @@ def _suggest(candidates, occasion, forecast, *, prompt, notes, model, storage=No
         openrouter.chat_json = lambda m, p, s: real_chat(m, p, s, image=sheet)
     try:
         started = time.monotonic()
-        choices = ai.sugerir_outfits(candidates, occasion, forecast, [], BATCH_SIZE)
+        choices = ai.sugerir_outfits(
+            candidates, occasion, forecast, [], BATCH_SIZE, profile=profile
+        )
         return choices, time.monotonic() - started
     finally:
         ai.PROMPT, ai.describe_garment, settings.outfit_model, openrouter.chat_json = saved
@@ -172,6 +215,7 @@ def generate(user_id: str, strong_model: str | None) -> None:
                 "storage": storage,
             },
         }
+        variants["E_con_revisor"] = {"prompt": ai.PROMPT, "notes": True, "model": base_model}
         if strong_model:
             variants["D_modelo_fuerte"] = {
                 "prompt": ai.PROMPT,
@@ -179,6 +223,10 @@ def generate(user_id: str, strong_model: str | None) -> None:
                 "model": strong_model,
             }
 
+        owner = db.get(User, uuid.UUID(user_id))
+        for name in variants:
+            if name != "A_actual":
+                variants[name]["profile"] = owner.style_profile
         cards: dict[str, dict] = {}
         key: dict[str, list[dict]] = {}
         stats: dict[str, dict] = defaultdict(lambda: {"seconds": [], "problems": [], "empty": 0})
@@ -200,6 +248,12 @@ def generate(user_id: str, strong_model: str | None) -> None:
                 if not valid:
                     stats[name]["empty"] += 1
                     continue
+                if name == "E_con_revisor" and len(valid) > 1:
+                    started = time.monotonic()
+                    valid = _review(
+                        valid, garments, occasion, forecast, owner.style_profile, base_model
+                    )
+                    stats[name]["seconds"][-1] += time.monotonic() - started
                 choice = valid[0]
                 stats[name]["problems"] += [f"{label}: {p}" for p in _problems(choice)]
                 ids = sorted(str(g) for g in choice.garment_ids.values() if g)

@@ -44,6 +44,6 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.status === 204 ? (undefined as T) : response.json();
 }
 
-export function jsonBody(method: 'POST' | 'PATCH', body: object): RequestInit {
+export function jsonBody(method: 'POST' | 'PATCH' | 'PUT', body: object): RequestInit {
   return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
 }
