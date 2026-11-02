@@ -190,7 +190,7 @@ export function useCreateOutfit() {
 export function useDeleteOutfit() {
   return useMutation({
     mutationFn: (id: string) => api<void>(`/outfits/${id}`, { method: 'DELETE' }),
-    onSuccess: refreshAfterOutfitChange,
+    onSettled: refreshAfterOutfitChange,
     meta: REPORT_FAILURE,
   });
 }
@@ -231,7 +231,7 @@ export function useSaveOutfit() {
 export function useUnsaveOutfit() {
   return useMutation({
     mutationFn: (id: string) => api<void>(`/saved-outfits/${id}`, { method: 'DELETE' }),
-    onSuccess: refreshSaved,
+    onSettled: refreshSaved,
     meta: REPORT_FAILURE,
   });
 }
