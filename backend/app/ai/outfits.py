@@ -93,7 +93,7 @@ class OutfitChoice:
     explanation: str
 
 
-def _wishes(profile: str | None, note: str | None) -> str:
+def _wishes(profile: str | None, note: str | None, feelings: list[dict] | None = None) -> str:
     # JSON-encoded so that what the person typed stays data, not part of the instructions.
     def quoted(text: str) -> str:
         return json.dumps(text, ensure_ascii=False)
@@ -101,6 +101,12 @@ def _wishes(profile: str | None, note: str | None) -> str:
     lines = []
     if profile:
         lines.append(f"About this person, in their own words: {quoted(profile)}")
+    if feelings:
+        lines.append(
+            "How earlier outfits felt to them, newest first. Lean toward what worked and away from "
+            "what did not; one bad outfit does not ban its pieces: "
+            f"{json.dumps(feelings, ensure_ascii=False)}"
+        )
     if note:
         lines.append(f"What they ask for now, which outranks the above: {quoted(note)}")
     return "\n".join(lines) + "\n" if lines else ""
@@ -141,6 +147,7 @@ def sugerir_outfits(
     count: int,
     profile: str | None = None,
     note: str | None = None,
+    feelings: list[dict] | None = None,
 ) -> list[OutfitChoice]:
     # Short refs instead of UUIDs: fewer tokens and no chance of a mistyped id.
     garments = [g for group in candidates.by_category.values() for g in group]
@@ -151,7 +158,7 @@ def sugerir_outfits(
         count=count,
         occasion=OCCASION_DESCRIPTIONS[occasion],
         weather=_describe_weather(forecast),
-        wishes=_wishes(profile, note),
+        wishes=_wishes(profile, note, feelings),
         garments=json.dumps(
             [describe_garment(ref, garment) for ref, garment in by_ref.items()],
             ensure_ascii=False,

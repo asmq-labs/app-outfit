@@ -46,6 +46,17 @@ def list_saved_outfits(user: CurrentUser, db: DbSession) -> list[SavedOutfitOut]
     return [_saved_out(db, saved) for saved in service.list_saved(db, user)]
 
 
+@router.put("/{saved_id}")
+def update_saved_outfit(
+    saved: OwnedSaved, body: SavedOutfitIn, user: CurrentUser, db: DbSession
+) -> SavedOutfitOut:
+    garment_ids = {category: body.garments.get(category) for category in GarmentCategory}
+    try:
+        return _saved_out(db, service.update_saved(db, user, saved, garment_ids))
+    except service.InvalidOutfitError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_outfit") from exc
+
+
 @router.delete("/{saved_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_saved_outfit(saved: OwnedSaved, db: DbSession) -> None:
     service.delete_saved(db, saved)

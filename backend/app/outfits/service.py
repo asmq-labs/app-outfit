@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.ai.openrouter import AIError
 from app.ai.outfits import OutfitChoice, sugerir_outfits
 from app.models import (
+    Feeling,
     Garment,
     GarmentCategory,
     GarmentStatus,
@@ -23,6 +24,30 @@ BATCH_SIZE = 3
 FALLBACK_EXPLANATION = "Una combinación sencilla con prendas que no has usado últimamente."
 PLANNED_EXPLANATION = "El outfit que planeaste para hoy."
 SAVED_EXPLANATION = "Uno de tus outfits guardados."
+SWAPPED_EXPLANATION = "Tu versión de este outfit, con el cambio que elegiste."
+
+# What each reason means, in the words the model reads. The phone shows its own labels.
+REASONS: dict[Feeling, dict[str, str]] = {
+    Feeling.GOOD: {
+        "comfortable": "comfortable",
+        "looks_good": "they liked how they looked",
+        "confident": "made them feel confident",
+        "right_occasion": "right for the occasion",
+        "right_weather": "right for the weather",
+        "colors": "they liked the colors",
+    },
+    Feeling.BAD: {
+        "uncomfortable": "uncomfortable",
+        "not_my_style": "not their style",
+        "bad_match": "the pieces did not go together",
+        "wrong_occasion": "wrong for the occasion",
+        "too_hot": "too hot",
+        "too_cold": "too cold",
+        "bad_fit": "something did not fit them well",
+    },
+}
+# Enough to show a taste without making every prompt long.
+FEELINGS_IN_PROMPT = 10
 
 Combo = frozenset[uuid.UUID]
 
@@ -45,6 +70,10 @@ class GarmentNotReadyError(Exception):
 
 
 class InvalidOutfitError(Exception):
+    pass
+
+
+class InvalidFeelingError(Exception):
     pass
 
 
@@ -90,6 +119,32 @@ def _is_available(outfit: Outfit) -> bool:
     return outfit.dismissed_at is None and outfit.is_complete
 
 
+def _with_feeling(user: User):
+    return select(Outfit).where(Outfit.user_id == user.id, Outfit.feeling.is_not(None))
+
+
+def _recent_feelings(db: Session, user: User) -> list[dict]:
+    outfits = db.scalars(
+        _with_feeling(user).order_by(Outfit.felt_at.desc()).limit(FEELINGS_IN_PROMPT)
+    )
+    feelings = []
+    for outfit in outfits:
+        garments = (db.get(Garment, gid) for gid in _combo(outfit.garment_ids()))
+        feelings.append(
+            {
+                "felt": outfit.feeling.value,
+                "reasons": [REASONS[outfit.feeling][r] for r in outfit.feeling_reasons],
+                "garments": sorted(g.name for g in garments if g is not None and g.name),
+            }
+        )
+    return feelings
+
+
+def _disliked(db: Session, user: User) -> set[Combo]:
+    outfits = db.scalars(_with_feeling(user).where(Outfit.feeling == Feeling.BAD))
+    return {_combo(outfit.garment_ids()) for outfit in outfits}
+
+
 def _generate(
     db: Session,
     user: User,
@@ -114,26 +169,32 @@ def _generate(
         raise NotEnoughGarmentsError(candidates.missing)
 
     seen = set() if fresh else {_combo(outfit.garment_ids()) for outfit in existing}
+    disliked = _disliked(db, user)
     try:
         choices = sugerir_outfits(
             candidates,
             occasion,
             forecast,
-            list(seen),
+            list(seen | disliked),
             BATCH_SIZE,
             profile=user.style_profile,
             note=note,
+            feelings=_recent_feelings(db, user),
         )
     except AIError:
         choices = []
-    if not existing or around is not None or fresh:
+    must_answer = not existing or around is not None or fresh
+    if must_answer:
         # The first outfit of the day, or one asked for, must never fail because of the model.
         choices.append(_fallback_choice(candidates))
 
+    usable = [c for c in choices if _is_wearable(c) and _combo(c.garment_ids) not in seen]
+    wanted = [c for c in usable if _combo(c.garment_ids) not in disliked]
+    # A combination they disliked comes back only when the closet can make nothing else.
     outfits = []
-    for choice in choices:
+    for choice in wanted or (usable[:1] if must_answer else []):
         combo = _combo(choice.garment_ids)
-        if not _is_wearable(choice) or combo in seen:
+        if combo in seen:
             continue
         seen.add(combo)
         slots = {f"{category.value}_id": gid for category, gid in choice.garment_ids.items()}
@@ -320,6 +381,45 @@ def another(db: Session, user: User, outfit: Outfit, forecast: Forecast | None) 
     return replacement
 
 
+def swap_garments(
+    db: Session, user: User, outfit: Outfit, garment_ids: dict[GarmentCategory, uuid.UUID | None]
+) -> Outfit:
+    if outfit.worn_at is not None:
+        raise InvalidOutfitError
+    _check_wearable(db, user, garment_ids)
+    combo = _combo(garment_ids)
+    if combo == _combo(outfit.garment_ids()):
+        return outfit
+    # The original steps aside and stays on record, so "Otra" does not bring it right back.
+    outfit.dismissed_at = dt.datetime.now(dt.UTC)
+    replacement = Outfit(
+        user_id=user.id,
+        day=outfit.day,
+        occasion=outfit.occasion,
+        position=outfit.position,
+        explanation=PLANNED_EXPLANATION if outfit.planned else SWAPPED_EXPLANATION,
+        request_note=outfit.request_note,
+        anchor_garment_id=outfit.anchor_garment_id if outfit.anchor_garment_id in combo else None,
+        planned=outfit.planned,
+        **{f"{category.value}_id": gid for category, gid in garment_ids.items()},
+    )
+    db.add(replacement)
+    db.commit()
+    return replacement
+
+
+def set_feeling(db: Session, outfit: Outfit, feeling: Feeling | None, reasons: list[str]) -> Outfit:
+    if feeling is None:
+        reasons = []
+    elif not set(reasons) <= set(REASONS[feeling]):
+        raise InvalidFeelingError
+    outfit.feeling = feeling
+    outfit.feeling_reasons = reasons
+    outfit.felt_at = dt.datetime.now(dt.UTC) if feeling else None
+    db.commit()
+    return outfit
+
+
 def _uses(garment_id: uuid.UUID) -> ColumnElement[bool]:
     return or_(*(getattr(Outfit, f"{c.value}_id") == garment_id for c in GarmentCategory))
 
@@ -358,6 +458,8 @@ def unwear(db: Session, outfit: Outfit) -> Outfit:
     if outfit.worn_at is not None:
         outfit.worn_at = None
         outfit.planned = outfit.explanation == PLANNED_EXPLANATION
+        # An opinion about wearing it does not outlive taking the wear back.
+        outfit.feeling, outfit.feeling_reasons, outfit.felt_at = None, [], None
         _refresh_wear(db, set(_combo(outfit.garment_ids())))
         db.commit()
     return outfit
@@ -479,6 +581,25 @@ def save(
         return existing
     saved = SavedOutfit(user_id=user.id, **{f"{c.value}_id": gid for c, gid in garment_ids.items()})
     db.add(saved)
+    db.commit()
+    return saved
+
+
+def update_saved(
+    db: Session,
+    user: User,
+    saved: SavedOutfit,
+    garment_ids: dict[GarmentCategory, uuid.UUID | None],
+) -> SavedOutfit:
+    _check_wearable(db, user, garment_ids)
+    # Becoming identical to another saved outfit leaves a single copy.
+    other = find_saved(db, user.id, garment_ids)
+    if other is not None and other.id != saved.id:
+        db.delete(saved)
+        db.commit()
+        return other
+    for category, garment_id in garment_ids.items():
+        setattr(saved, f"{category.value}_id", garment_id)
     db.commit()
     return saved
 

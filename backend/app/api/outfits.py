@@ -5,7 +5,15 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.schemas import ForecastOut, GarmentOut, OutfitIn, OutfitOut, OutfitRequestIn
+from app.api.schemas import (
+    FeelingIn,
+    ForecastOut,
+    GarmentOut,
+    OutfitGarmentsIn,
+    OutfitIn,
+    OutfitOut,
+    OutfitRequestIn,
+)
 from app.auth.deps import CurrentUser, DbSession
 from app.garments import service as garment_service
 from app.models import Garment, GarmentCategory, Occasion, Outfit
@@ -48,6 +56,8 @@ def _outfit_out(db: Session, outfit: Outfit, forecast: Forecast | None) -> Outfi
         garments=garments,
         off_occasion=off_occasion,
         forecast=ForecastOut.model_validate(forecast) if forecast else None,
+        feeling=outfit.feeling,
+        feeling_reasons=outfit.feeling_reasons,
     )
 
 
@@ -158,6 +168,38 @@ def suggest_another(
     except (service.NoMoreOutfitsError, service.NotEnoughGarmentsError) as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, {"code": "no_more_outfits"}) from exc
     return _outfit_out(db, replacement, forecast)
+
+
+@router.put("/{outfit_id}/garments")
+def swap_outfit_garments(
+    outfit: OwnedOutfit,
+    body: OutfitGarmentsIn,
+    user: CurrentUser,
+    db: DbSession,
+    lat: Latitude = None,
+    lon: Longitude = None,
+) -> OutfitOut:
+    garment_ids = {category: body.garments.get(category) for category in GarmentCategory}
+    try:
+        swapped = service.swap_garments(db, user, outfit, garment_ids)
+    except service.InvalidOutfitError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_outfit") from exc
+    return _outfit_out(db, swapped, _forecast(outfit.day, lat, lon))
+
+
+@router.put("/{outfit_id}/feeling")
+def set_outfit_feeling(
+    outfit: OwnedOutfit,
+    body: FeelingIn,
+    db: DbSession,
+    lat: Latitude = None,
+    lon: Longitude = None,
+) -> OutfitOut:
+    try:
+        rated = service.set_feeling(db, outfit, body.feeling, body.reasons)
+    except service.InvalidFeelingError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_feeling") from exc
+    return _outfit_out(db, rated, _forecast(outfit.day, lat, lon))
 
 
 @router.post("/{outfit_id}/wear")

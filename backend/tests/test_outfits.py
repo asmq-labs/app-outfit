@@ -648,8 +648,17 @@ def asks(monkeypatch):
     # Records what the stylist receives, answering with the first combination it can make.
     received = []
 
-    def suggest(candidates, occasion, forecast, seen, count, profile=None, note=None):
-        received.append({"profile": profile, "note": note, "tops": candidates.by_category})
+    def suggest(
+        candidates, occasion, forecast, seen, count, profile=None, note=None, feelings=None
+    ):
+        received.append(
+            {
+                "profile": profile,
+                "note": note,
+                "feelings": feelings,
+                "tops": candidates.by_category,
+            }
+        )
         ids = dict.fromkeys(GarmentCategory)
         for category in (GarmentCategory.TOP, GarmentCategory.BOTTOM, GarmentCategory.SHOES):
             ids[category] = candidates.by_category[category][0].id
@@ -766,3 +775,242 @@ def test_a_small_closet_still_gets_an_outfit_after_changing_the_profile(client, 
     assert again.status_code == 200
     assert again.json()["id"] != first["id"]
     assert asks[-1]["profile"] == "Sencillo"
+
+
+def ids_with(outfit, **changes) -> dict[str, str | None]:
+    slots = {slot: item["id"] if item else None for slot, item in outfit["garments"].items()}
+    return {**slots, **changes}
+
+
+def test_swapping_one_piece_keeps_the_rest_and_becomes_todays_outfit(client, user, closet, stylist):
+    shown = today(client, user).json()
+    other_bottom = next(g for g in closet[2:4] if str(g.id) != shown["garments"]["bottom"]["id"])
+
+    response = client.put(
+        f"/v1/outfits/{shown['id']}/garments",
+        json={"garments": ids_with(shown, bottom=str(other_bottom.id))},
+        headers=user,
+    )
+
+    assert response.status_code == 200
+    swapped = response.json()
+    assert swapped["garments"]["bottom"]["id"] == str(other_bottom.id)
+    assert swapped["garments"]["top"]["id"] == shown["garments"]["top"]["id"]
+    assert swapped["explanation"] == service.SWAPPED_EXPLANATION
+    assert today(client, user).json()["id"] == swapped["id"]
+
+
+def test_swapping_nothing_keeps_the_same_outfit(client, user, closet, stylist):
+    shown = today(client, user).json()
+
+    response = client.put(
+        f"/v1/outfits/{shown['id']}/garments", json={"garments": ids_with(shown)}, headers=user
+    )
+
+    assert response.json()["id"] == shown["id"]
+
+
+def test_a_swap_must_stay_wearable_and_cannot_change_what_was_worn(client, user, closet, stylist):
+    shown = today(client, user).json()
+    url = f"/v1/outfits/{shown['id']}/garments"
+
+    no_shoes = client.put(url, json={"garments": ids_with(shown, shoes=None)}, headers=user)
+    client.post(f"/v1/outfits/{shown['id']}/wear", headers=user)
+    worn = client.put(url, json={"garments": ids_with(shown)}, headers=user)
+
+    assert no_shoes.status_code == 422
+    assert worn.status_code == 422
+
+
+def test_a_swap_cannot_touch_someone_elses_outfit(client, user, closet, stylist):
+    shown = today(client, user).json()
+    stranger = auth_header(client.post("/v1/auth/guest").json())
+
+    response = client.put(
+        f"/v1/outfits/{shown['id']}/garments", json={"garments": ids_with(shown)}, headers=stranger
+    )
+
+    assert response.status_code == 404
+
+
+def test_swapping_a_plan_keeps_it_a_plan(client, user, closet, stylist):
+    plan = manual(client, user, closet, worn=False).json()
+    other_top = closet[1]
+
+    swapped = client.put(
+        f"/v1/outfits/{plan['id']}/garments",
+        json={"garments": ids_with(plan, top=str(other_top.id))},
+        headers=user,
+    ).json()
+
+    assert swapped["planned"] is True
+    calendar = client.get(
+        "/v1/outfits/calendar",
+        params={"start": TODAY.isoformat(), "end": TODAY.isoformat()},
+        headers=user,
+    ).json()
+    assert [item["id"] for item in calendar] == [swapped["id"]]
+
+
+def feel(client, headers, outfit, feeling, reasons=()):
+    return client.put(
+        f"/v1/outfits/{outfit['id']}/feeling",
+        json={"feeling": feeling, "reasons": list(reasons)},
+        headers=headers,
+    )
+
+
+def test_a_feeling_is_stored_changed_and_taken_back(client, user, closet, stylist):
+    shown = today(client, user).json()
+
+    good = feel(client, user, shown, "good", ["comfortable", "colors"]).json()
+    changed = feel(client, user, shown, "bad", ["too_hot"]).json()
+    cleared = feel(client, user, shown, None).json()
+
+    assert (good["feeling"], good["feeling_reasons"]) == ("good", ["comfortable", "colors"])
+    assert (changed["feeling"], changed["feeling_reasons"]) == ("bad", ["too_hot"])
+    assert (cleared["feeling"], cleared["feeling_reasons"]) == (None, [])
+
+
+def test_a_feeling_only_accepts_reasons_of_its_own_kind(client, user, closet, stylist):
+    shown = today(client, user).json()
+
+    assert feel(client, user, shown, "good", ["too_hot"]).status_code == 422
+    assert feel(client, user, shown, "bad", ["made up"]).status_code == 422
+
+
+def test_someone_else_cannot_rate_an_outfit(client, user, closet, stylist):
+    shown = today(client, user).json()
+    stranger = auth_header(client.post("/v1/auth/guest").json())
+
+    assert feel(client, stranger, shown, "good").status_code == 404
+
+
+def test_undoing_a_wear_takes_its_feeling_back(client, user, closet, stylist):
+    shown = today(client, user).json()
+    client.post(f"/v1/outfits/{shown['id']}/wear", headers=user)
+    feel(client, user, shown, "good")
+
+    undone = client.post(f"/v1/outfits/{shown['id']}/unwear", headers=user).json()
+
+    assert undone["feeling"] is None
+
+
+def test_feelings_reach_the_stylist_as_plain_words(client, user, closet, asks):
+    shown = today(client, user).json()
+    feel(client, user, shown, "bad", ["too_hot"])
+
+    request(client, user)
+
+    received = asks[-1]["feelings"]
+    assert received[0]["felt"] == "bad"
+    assert received[0]["reasons"] == ["too hot"]
+    assert len(received[0]["garments"]) == 3
+
+
+def test_a_disliked_combination_does_not_come_back_while_others_exist(
+    client, user, closet, stylist
+):
+    shown = today(client, user).json()
+    feel(client, user, shown, "bad")
+
+    answer = request(client, user).json()
+
+    assert ids_with(answer) != ids_with(shown)
+
+
+def test_a_disliked_combination_is_dropped_even_if_the_model_proposes_it(
+    client, user, closet, stylist, monkeypatch
+):
+    shown = today(client, user).json()
+    feel(client, user, shown, "bad")
+    top, other_top, bottom, _, shoes = closet
+    disliked = {
+        GarmentCategory(slot): uuid.UUID(gid) if gid else None
+        for slot, gid in ids_with(shown).items()
+    }
+    different = dict.fromkeys(GarmentCategory)
+    used_top = str(top.id) == shown["garments"]["top"]["id"]
+    different.update(
+        {
+            GarmentCategory.TOP: other_top.id if used_top else top.id,
+            GarmentCategory.BOTTOM: bottom.id,
+            GarmentCategory.SHOES: shoes.id,
+        }
+    )
+    monkeypatch.setattr(
+        service,
+        "sugerir_outfits",
+        lambda *_, **__: [OutfitChoice(disliked, "Otra vez."), OutfitChoice(different, "Nuevo.")],
+    )
+
+    answer = request(client, user).json()
+
+    assert answer["explanation"] == "Nuevo."
+
+
+def test_a_disliked_combination_returns_only_when_nothing_else_is_possible(
+    client, db, user, closet, asks
+):
+    for extra in closet[1], closet[3]:
+        db.delete(extra)
+    db.commit()
+    shown = today(client, user).json()
+    feel(client, user, shown, "bad")
+
+    assert request(client, user).status_code == 200
+
+
+def test_feelings_stay_quoted_data_in_the_prompt():
+    text = _wishes(None, None, [{"felt": "bad", "reasons": ["too hot"], "garments": ['a"b']}])
+
+    assert '"felt": "bad"' in text
+    assert 'a\\"b' in text
+
+
+def test_a_saved_outfit_can_change_one_piece(client, user, closet):
+    saved = client.post(
+        "/v1/saved-outfits", json={"garments": combination(closet)}, headers=user
+    ).json()
+    other_top = closet[1]
+
+    updated = client.put(
+        f"/v1/saved-outfits/{saved['id']}",
+        json={"garments": ids_with(saved, top=str(other_top.id))},
+        headers=user,
+    ).json()
+
+    assert updated["id"] == saved["id"]
+    assert updated["garments"]["top"]["id"] == str(other_top.id)
+
+
+def test_a_saved_outfit_that_becomes_a_copy_merges(client, user, closet):
+    first = client.post(
+        "/v1/saved-outfits", json={"garments": combination(closet)}, headers=user
+    ).json()
+    second = client.post(
+        "/v1/saved-outfits",
+        json={"garments": ids_with(first, top=str(closet[1].id))},
+        headers=user,
+    ).json()
+
+    merged = client.put(
+        f"/v1/saved-outfits/{second['id']}", json={"garments": ids_with(first)}, headers=user
+    ).json()
+
+    assert merged["id"] == first["id"]
+    assert len(client.get("/v1/saved-outfits", headers=user).json()) == 1
+
+
+def test_a_saved_outfit_cannot_become_unwearable(client, user, closet):
+    saved = client.post(
+        "/v1/saved-outfits", json={"garments": combination(closet)}, headers=user
+    ).json()
+
+    response = client.put(
+        f"/v1/saved-outfits/{saved['id']}",
+        json={"garments": ids_with(saved, shoes=None)},
+        headers=user,
+    )
+
+    assert response.status_code == 422

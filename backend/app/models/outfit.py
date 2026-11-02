@@ -2,7 +2,7 @@ import datetime as dt
 import enum
 import uuid
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import JSON, Date, DateTime, ForeignKey, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -15,6 +15,11 @@ class Occasion(enum.StrEnum):
     NIGHT_OUT = "night_out"
     FORMAL = "formal"
     SPORT = "sport"
+
+
+class Feeling(enum.StrEnum):
+    GOOD = "good"
+    BAD = "bad"
 
 
 def garment_slot() -> Mapped[uuid.UUID | None]:
@@ -48,6 +53,10 @@ class Outfit(Base):
     planned: Mapped[bool] = mapped_column(default=False, server_default="false")
     dismissed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     worn_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    # How it felt to the person, which guides later suggestions.
+    feeling: Mapped[Feeling | None] = mapped_column(text_enum(Feeling))
+    feeling_reasons: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
+    felt_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models import (
+    Feeling,
     Formality,
     GarmentCategory,
     GarmentStatus,
@@ -124,6 +125,8 @@ class OutfitOut(BaseModel):
     # Categories the closet could only fill with something off the occasion.
     off_occasion: list[str]
     forecast: ForecastOut | None
+    feeling: Feeling | None
+    feeling_reasons: list[str]
 
 
 class MissingPieceOut(BaseModel):
@@ -148,6 +151,16 @@ class OutfitIn(BaseModel):
     # True logs it as worn; false plans it for that day.
     worn: bool
     garments: dict[GarmentCategory, uuid.UUID | None]
+
+
+class OutfitGarmentsIn(BaseModel):
+    garments: dict[GarmentCategory, uuid.UUID | None]
+
+
+class FeelingIn(BaseModel):
+    # Null takes the opinion back.
+    feeling: Feeling | None
+    reasons: list[str] = Field(default=[], max_length=8)
 
 
 class SavedOutfitIn(BaseModel):
