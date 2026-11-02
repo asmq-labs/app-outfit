@@ -23,12 +23,15 @@ import { THEME } from '@/lib/theme';
 const INK = THEME.light.foreground;
 const DISMISSED_DAY_KEY = 'feeling_prompt_dismissed_day';
 
-function reasonLabels(outfit: Outfit): string {
-  if (!outfit.feeling) return '';
-  return FEELING_REASONS[outfit.feeling]
+const OPINION: Record<Feeling, string> = { good: 'Te gustó', bad: 'No te convenció' };
+
+function opinionText(outfit: Outfit): string {
+  if (!outfit.feeling) return '¿Cómo te sentiste con este outfit?';
+  const reasons = FEELING_REASONS[outfit.feeling]
     .filter(({ value }) => outfit.feeling_reasons.includes(value))
-    .map(({ label }) => label)
+    .map(({ label }) => label.toLowerCase())
     .join(', ');
+  return reasons ? `${OPINION[outfit.feeling]}: ${reasons}.` : `${OPINION[outfit.feeling]}.`;
 }
 
 // Beside the heart: saving keeps an outfit, this one says it is not for you and moves on.
@@ -72,7 +75,7 @@ function FeelingButton({
         tapFeedback();
         openFeeling(outfit, feeling);
       }}>
-      <Icon as={icon} size={16} />
+      <Icon as={icon} size={16} fill={active ? 'currentColor' : 'transparent'} />
       <Text className="font-sans-semibold">{label}</Text>
     </Button>
   );
@@ -80,13 +83,9 @@ function FeelingButton({
 
 // Once it was worn there is a real answer to give, so the question comes after "Me lo pongo".
 export function FeelingRow({ outfit }: { outfit: Outfit }) {
-  const reasons = reasonLabels(outfit);
   return (
     <View className="gap-2">
-      <Text className="text-center text-sm text-muted-foreground">
-        {reasons ||
-          (outfit.feeling ? 'Guardamos tu opinión.' : '¿Cómo te sentiste con este outfit?')}
-      </Text>
+      <Text className="text-center text-sm text-muted-foreground">{opinionText(outfit)}</Text>
       <View className="flex-row gap-3">
         <FeelingButton outfit={outfit} feeling="good" icon={ThumbsUpIcon} label="Bien" />
         <FeelingButton outfit={outfit} feeling="bad" icon={ThumbsDownIcon} label="No tanto" />

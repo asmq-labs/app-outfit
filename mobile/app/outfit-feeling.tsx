@@ -1,20 +1,48 @@
+import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as React from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/app/button';
 import { ChoiceChips } from '@/components/app/choice-chips';
 import { SheetHandle } from '@/components/app/sheet-handle';
 import { Text } from '@/components/ui/text';
-import { successFeedback } from '@/lib/haptics';
+import { type Garment, useGarmentImage, useGarments } from '@/lib/garments';
+import { selectionFeedback, successFeedback } from '@/lib/haptics';
 import { useCoords } from '@/lib/location';
 import { FEELING_REASONS, type Feeling, useSetFeeling } from '@/lib/outfits';
+import { cn } from '@/lib/utils';
 
 const TITLES: Record<Feeling, string> = {
   good: '¿Qué te gustó?',
   bad: '¿Qué no te convenció?',
 };
+
+function Piece({
+  garment,
+  selected,
+  onPress,
+}: {
+  garment: Garment;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const image = useGarmentImage(garment, { size: 'thumb' });
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={garment.name ?? undefined}
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      className={cn(
+        'h-16 flex-1 overflow-hidden rounded-xl border-2 bg-white',
+        selected ? 'border-primary' : 'border-border'
+      )}>
+      <Image source={image} contentFit="contain" style={{ flex: 1 }} />
+    </Pressable>
+  );
+}
 
 // Reasons are optional: a single tap on "Guardar" already says how it felt.
 export default function OutfitFeelingSheet() {
@@ -23,6 +51,8 @@ export default function OutfitFeelingSheet() {
     id: string;
     feeling: Feeling;
     reasons?: string;
+    chosen?: string;
+    pieces?: string;
     rated?: string;
     replace?: string;
   }>();
@@ -31,6 +61,12 @@ export default function OutfitFeelingSheet() {
   const [reasons, setReasons] = React.useState<string[]>(
     params.reasons ? JSON.parse(params.reasons) : []
   );
+  const [chosen, setChosen] = React.useState<string[]>(
+    params.chosen ? JSON.parse(params.chosen) : []
+  );
+  const { data: closet = [] } = useGarments();
+  const pieceIds: string[] = params.pieces ? JSON.parse(params.pieces) : [];
+  const pieces = closet.filter((garment) => pieceIds.includes(garment.id));
   const set = useSetFeeling(useCoords());
 
   function toggle(reason: string): void {
@@ -41,7 +77,13 @@ export default function OutfitFeelingSheet() {
 
   function submit(next: Feeling | null): void {
     set.mutate(
-      { id, feeling: next, reasons: next ? reasons : [], replace: replace && next === 'bad' },
+      {
+        id,
+        feeling: next,
+        reasons: next ? reasons : [],
+        garmentIds: next ? chosen : [],
+        replace: replace && next === 'bad',
+      },
       {
         onSuccess: () => {
           successFeedback();
@@ -56,9 +98,7 @@ export default function OutfitFeelingSheet() {
       <View className="gap-1">
         <SheetHandle />
         <Text className="font-serif-medium text-2xl">{TITLES[feeling]}</Text>
-        <Text className="text-muted-foreground">
-          Elige lo que quieras. Nos ayuda a acertar la próxima vez.
-        </Text>
+        <Text className="text-muted-foreground">Así aprendemos lo que funciona para ti.</Text>
       </View>
 
       <ChoiceChips
@@ -67,6 +107,31 @@ export default function OutfitFeelingSheet() {
         selected={reasons}
         onSelect={toggle}
       />
+
+      {pieces.length > 0 && (
+        <View className="gap-2">
+          <Text className="font-sans-medium text-sm text-muted-foreground">
+            ¿Fue por alguna prenda? (opcional)
+          </Text>
+          <View className="flex-row gap-2">
+            {pieces.map((garment) => (
+              <Piece
+                key={garment.id}
+                garment={garment}
+                selected={chosen.includes(garment.id)}
+                onPress={() => {
+                  selectionFeedback();
+                  setChosen((current) =>
+                    current.includes(garment.id)
+                      ? current.filter((id) => id !== garment.id)
+                      : [...current, garment.id]
+                  );
+                }}
+              />
+            ))}
+          </View>
+        </View>
+      )}
 
       {set.isError && (
         <Text className="text-center text-sm text-destructive">

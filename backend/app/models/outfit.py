@@ -56,6 +56,8 @@ class Outfit(Base):
     # How it felt to the person, which guides later suggestions.
     feeling: Mapped[Feeling | None] = mapped_column(text_enum(Feeling))
     feeling_reasons: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
+    # The pieces the opinion was about; empty means the outfit as a whole.
+    feeling_garment_ids: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
     felt_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

@@ -127,6 +127,7 @@ class OutfitOut(BaseModel):
     forecast: ForecastOut | None
     feeling: Feeling | None
     feeling_reasons: list[str]
+    feeling_garment_ids: list[uuid.UUID]
 
 
 class MissingPieceOut(BaseModel):
@@ -161,6 +162,7 @@ class FeelingIn(BaseModel):
     # Null takes the opinion back.
     feeling: Feeling | None
     reasons: list[str] = Field(default=[], max_length=8)
+    garment_ids: list[uuid.UUID] = Field(default=[], max_length=6)
 
 
 class SavedOutfitIn(BaseModel):

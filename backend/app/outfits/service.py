@@ -1,3 +1,4 @@
+import collections
 import datetime as dt
 import uuid
 
@@ -46,8 +47,12 @@ REASONS: dict[Feeling, dict[str, str]] = {
         "bad_fit": "something did not fit them well",
     },
 }
+# About how pieces work together, so they say nothing of a piece unless the person pointed at it.
+ABOUT_THE_COMBINATION = {"bad_match", "colors", "right_occasion", "wrong_occasion"}
 # Enough to show a taste without making every prompt long.
 FEELINGS_IN_PROMPT = 10
+# What each garment has earned goes back further, since it travels as a few short counts.
+FEELINGS_REMEMBERED = 300
 
 Combo = frozenset[uuid.UUID]
 
@@ -140,6 +145,30 @@ def _recent_feelings(db: Session, user: User) -> list[dict]:
     return feelings
 
 
+def _garment_history(db: Session, user: User) -> dict[uuid.UUID, dict[str, int]]:
+    # Comfort is personal: each garment carries how it has felt to this one person.
+    history: dict[uuid.UUID, collections.Counter[str]] = collections.defaultdict(
+        collections.Counter
+    )
+    outfits = db.scalars(
+        _with_feeling(user).order_by(Outfit.felt_at.desc()).limit(FEELINGS_REMEMBERED)
+    )
+    for outfit in outfits:
+        pointed = {uuid.UUID(garment_id) for garment_id in outfit.feeling_garment_ids}
+        reasons = [
+            REASONS[outfit.feeling][reason]
+            for reason in outfit.feeling_reasons
+            if pointed or reason not in ABOUT_THE_COMBINATION
+        ]
+        words = reasons or ["liked" if outfit.feeling == Feeling.GOOD else "disliked"]
+        for garment_id in pointed or _combo(outfit.garment_ids()):
+            history[garment_id].update(words)
+    for saved in _saved_of(db, user.id):
+        for garment_id in _combo(saved.garment_ids()):
+            history[garment_id]["kept in a saved outfit"] += 1
+    return {garment_id: dict(counts) for garment_id, counts in history.items()}
+
+
 def _disliked(db: Session, user: User) -> set[Combo]:
     outfits = db.scalars(_with_feeling(user).where(Outfit.feeling == Feeling.BAD))
     return {_combo(outfit.garment_ids()) for outfit in outfits}
@@ -180,6 +209,7 @@ def _generate(
             profile=user.style_profile,
             note=note,
             feelings=_recent_feelings(db, user),
+            history=_garment_history(db, user),
         )
     except AIError:
         choices = []
@@ -408,13 +438,22 @@ def swap_garments(
     return replacement
 
 
-def set_feeling(db: Session, outfit: Outfit, feeling: Feeling | None, reasons: list[str]) -> Outfit:
+def set_feeling(
+    db: Session,
+    outfit: Outfit,
+    feeling: Feeling | None,
+    reasons: list[str],
+    garment_ids: list[uuid.UUID],
+) -> Outfit:
     if feeling is None:
-        reasons = []
-    elif not set(reasons) <= set(REASONS[feeling]):
+        reasons, garment_ids = [], []
+    elif not (
+        set(reasons) <= set(REASONS[feeling]) and set(garment_ids) <= _combo(outfit.garment_ids())
+    ):
         raise InvalidFeelingError
     outfit.feeling = feeling
     outfit.feeling_reasons = reasons
+    outfit.feeling_garment_ids = [str(garment_id) for garment_id in garment_ids]
     outfit.felt_at = dt.datetime.now(dt.UTC) if feeling else None
     db.commit()
     return outfit
@@ -460,6 +499,7 @@ def unwear(db: Session, outfit: Outfit) -> Outfit:
         outfit.planned = outfit.explanation == PLANNED_EXPLANATION
         # An opinion about wearing it does not outlive taking the wear back.
         outfit.feeling, outfit.feeling_reasons, outfit.felt_at = None, [], None
+        outfit.feeling_garment_ids = []
         _refresh_wear(db, set(_combo(outfit.garment_ids())))
         db.commit()
     return outfit
@@ -614,6 +654,10 @@ def get_saved_for_user(db: Session, user: User, saved_id: uuid.UUID) -> SavedOut
 def delete_saved(db: Session, saved: SavedOutfit) -> None:
     db.delete(saved)
     db.commit()
+
+
+def was_chosen_by_user(outfit: Outfit) -> bool:
+    return outfit.planned or outfit.explanation in (SWAPPED_EXPLANATION, SAVED_EXPLANATION, "")
 
 
 def _empty_slot(outfit: Outfit | SavedOutfit, garment_id: uuid.UUID) -> None:

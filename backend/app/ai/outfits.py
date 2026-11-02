@@ -46,6 +46,10 @@ texture). The rest stays quiet, so two loud pieces never go together.
 refined; a delicate fabric next to a heavy one needs a clear reason.
 - Proportion: when style_notes mention fit, balance a relaxed piece with a slimmer or straight one.
 - Shoes finish the outfit: they match its formality and ideally echo a color already in it.
+- Personal history comes first: a garment's "history" counts how it has really felt to this \
+person, which general style knowledge cannot know. Favor pieces that worked and avoid pieces that \
+did not. When they ask for comfort, or for how they feel in something, decide from these counts \
+and not from fabric or cut; only without history for that piece may you judge by its description.
 
 "explanation": one short sentence, at most 20 words, in neutral Latin American Spanish, \
 addressing the person as "tú". Say the specific reason these pieces work together, naming colors \
@@ -57,7 +61,8 @@ Be honest: if a piece falls short of the occasion, or a request cannot be met, b
 has nothing better, get as close as possible and never pretend otherwise; say so in the \
 explanation when it was asked for. Never call such a piece formal or elegant. Use "jean", never \
 "mezclilla" or "denim". No emojis, no garment refs. Mention only garments that are in that \
-outfit."""
+outfit. When personal history decided a piece, say so plainly, like "Este jean ya te ha resultado \
+cómodo"."""
 
 
 def _schema(by_ref: dict[str, Garment]) -> dict:
@@ -119,8 +124,10 @@ def _describe_weather(forecast: Forecast | None) -> str:
     return f"between {forecast.min_c:.0f} and {forecast.max_c:.0f} degrees Celsius{rain}"
 
 
-def describe_garment(ref: str, garment: Garment) -> dict[str, str | None]:
-    return {
+def describe_garment(
+    ref: str, garment: Garment, history: dict[str, int] | None = None
+) -> dict[str, str | None | dict[str, int]]:
+    described: dict[str, str | None | dict[str, int]] = {
         "ref": ref,
         "category": garment.category.value,
         "name": garment.name,
@@ -129,6 +136,9 @@ def describe_garment(ref: str, garment: Garment) -> dict[str, str | None]:
         "formality": garment.formality.value if garment.formality else None,
         "style_notes": garment.style_notes,
     }
+    if history:
+        described["history"] = history
+    return described
 
 
 def _outerwear_rule(candidates: Candidates) -> str:
@@ -148,6 +158,7 @@ def sugerir_outfits(
     profile: str | None = None,
     note: str | None = None,
     feelings: list[dict] | None = None,
+    history: dict[uuid.UUID, dict[str, int]] | None = None,
 ) -> list[OutfitChoice]:
     # Short refs instead of UUIDs: fewer tokens and no chance of a mistyped id.
     garments = [g for group in candidates.by_category.values() for g in group]
@@ -160,7 +171,10 @@ def sugerir_outfits(
         weather=_describe_weather(forecast),
         wishes=_wishes(profile, note, feelings),
         garments=json.dumps(
-            [describe_garment(ref, garment) for ref, garment in by_ref.items()],
+            [
+                describe_garment(ref, garment, (history or {}).get(garment.id))
+                for ref, garment in by_ref.items()
+            ],
             ensure_ascii=False,
         ),
         outerwear_rule=_outerwear_rule(candidates),

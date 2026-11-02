@@ -41,7 +41,12 @@ def _outfit_out(db: Session, outfit: Outfit, forecast: Forecast | None) -> Outfi
     for category, garment_id in outfit.garment_ids().items():
         garment = db.get(Garment, garment_id) if garment_id else None
         garments[category.value] = GarmentOut.model_validate(garment) if garment else None
-        if garment is not None and not suits_occasion(garment, outfit.occasion):
+        # "We used the closest" only makes sense for what the app picked.
+        if (
+            garment is not None
+            and not service.was_chosen_by_user(outfit)
+            and not suits_occasion(garment, outfit.occasion)
+        ):
             off_occasion.append(category.value)
     saved = service.find_saved(db, outfit.user_id, outfit.garment_ids())
     return OutfitOut(
@@ -57,6 +62,7 @@ def _outfit_out(db: Session, outfit: Outfit, forecast: Forecast | None) -> Outfi
         forecast=ForecastOut.model_validate(forecast) if forecast else None,
         feeling=outfit.feeling,
         feeling_reasons=outfit.feeling_reasons,
+        feeling_garment_ids=outfit.feeling_garment_ids,
     )
 
 
@@ -195,7 +201,7 @@ def set_outfit_feeling(
     lon: Longitude = None,
 ) -> OutfitOut:
     try:
-        rated = service.set_feeling(db, outfit, body.feeling, body.reasons)
+        rated = service.set_feeling(db, outfit, body.feeling, body.reasons, body.garment_ids)
     except service.InvalidFeelingError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_feeling") from exc
     return _outfit_out(db, rated, _forecast(outfit.day, lat, lon))

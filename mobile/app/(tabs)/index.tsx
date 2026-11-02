@@ -110,7 +110,8 @@ export default function TodayScreen() {
 
         {outfit ? (
           <>
-            <YesterdayFeeling />
+            {/* Today's outfit comes first: yesterday only asks while it is still being decided. */}
+            {!outfit.worn && <YesterdayFeeling />}
             <OutfitTransition dimmed={another.isPending || switching}>
               <View className="flex-1">
                 {/* A new outfit is laid out whole, even when it shares pieces with the last one. */}
@@ -137,7 +138,7 @@ export default function TodayScreen() {
                 </Text>
               </Animated.View>
             </OutfitTransition>
-            {offOccasionNote(outfit) && (
+            {!outfit.worn && offOccasionNote(outfit) && (
               <Text className="text-center text-sm text-muted-foreground">
                 {offOccasionNote(outfit)}
               </Text>

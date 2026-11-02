@@ -4,7 +4,7 @@ import uuid
 import pytest
 
 from app.ai.openrouter import AIError
-from app.ai.outfits import OutfitChoice, _wishes
+from app.ai.outfits import OutfitChoice, _wishes, sugerir_outfits
 from app.models import Formality, Garment, GarmentCategory, GarmentStatus, Occasion, Warmth
 from app.outfits import service
 from app.outfits.candidates import MAX_PER_SLOT, select_candidates
@@ -664,13 +664,22 @@ def asks(monkeypatch):
     received = []
 
     def suggest(
-        candidates, occasion, forecast, seen, count, profile=None, note=None, feelings=None
+        candidates,
+        occasion,
+        forecast,
+        seen,
+        count,
+        profile=None,
+        note=None,
+        feelings=None,
+        history=None,
     ):
         received.append(
             {
                 "profile": profile,
                 "note": note,
                 "feelings": feelings,
+                "history": history,
                 "tops": candidates.by_category,
             }
         )
@@ -867,10 +876,10 @@ def test_swapping_a_plan_keeps_it_a_plan(client, user, closet, stylist):
     assert [item["id"] for item in calendar] == [swapped["id"]]
 
 
-def feel(client, headers, outfit, feeling, reasons=()):
+def feel(client, headers, outfit, feeling, reasons=(), pieces=()):
     return client.put(
         f"/v1/outfits/{outfit['id']}/feeling",
-        json={"feeling": feeling, "reasons": list(reasons)},
+        json={"feeling": feeling, "reasons": list(reasons), "garment_ids": list(pieces)},
         headers=headers,
     )
 
@@ -1029,3 +1038,108 @@ def test_a_saved_outfit_cannot_become_unwearable(client, user, closet):
     )
 
     assert response.status_code == 422
+
+
+def test_a_feeling_about_one_piece_counts_only_for_that_piece(client, user, closet, asks):
+    shown = today(client, user).json()
+    top_id, bottom_id = shown["garments"]["top"]["id"], shown["garments"]["bottom"]["id"]
+    feel(client, user, shown, "good", ["comfortable"], [top_id])
+
+    request(client, user)
+
+    history = {str(k): v for k, v in asks[-1]["history"].items()}
+    assert history[top_id] == {"comfortable": 1}
+    assert bottom_id not in history
+
+
+def test_a_feeling_about_the_outfit_counts_for_all_its_pieces(client, user, closet, asks):
+    shown = today(client, user).json()
+    feel(client, user, shown, "bad", ["uncomfortable"])
+
+    request(client, user)
+
+    history = {str(k): v for k, v in asks[-1]["history"].items()}
+    for slot in ("top", "bottom", "shoes"):
+        assert history[shown["garments"][slot]["id"]] == {"uncomfortable": 1}
+
+
+def test_history_accumulates_over_days_and_keeps_people_apart(client, db, user, closet, asks):
+    shown = today(client, user).json()
+    top_id = shown["garments"]["top"]["id"]
+    feel(client, user, shown, "good", ["comfortable"], [top_id])
+    later = TODAY + dt.timedelta(days=1)
+    next_day = today(client, user, day=later).json()
+    if next_day["garments"]["top"]["id"] == top_id:
+        feel(client, user, next_day, "good", ["comfortable"], [top_id])
+        expected = 2
+    else:
+        expected = 1
+
+    request(client, user)
+
+    assert {str(k): v for k, v in asks[-1]["history"].items()}[top_id]["comfortable"] == expected
+    stranger = auth_header(client.post("/v1/auth/guest").json())
+    assert client.get("/v1/me", headers=stranger).status_code == 200
+    assert feel(client, stranger, shown, "good").status_code == 404
+
+
+def test_a_combination_reason_does_not_blame_each_piece(client, user, closet, asks):
+    shown = today(client, user).json()
+    feel(client, user, shown, "bad", ["bad_match"])
+
+    request(client, user)
+
+    assert asks[-1]["history"][uuid.UUID(shown["garments"]["top"]["id"])] == {"disliked": 1}
+
+
+def test_saving_an_outfit_counts_in_each_garments_history(client, user, closet, asks):
+    client.post("/v1/saved-outfits", json={"garments": combination(closet)}, headers=user)
+
+    request(client, user)
+
+    assert asks[-1]["history"][closet[0].id] == {"kept in a saved outfit": 1}
+
+
+def test_a_feeling_cannot_point_at_a_piece_outside_the_outfit(client, user, closet, stylist):
+    shown = today(client, user).json()
+    worn_ids = {item["id"] for item in shown["garments"].values() if item}
+    outside = next(str(g.id) for g in closet if str(g.id) not in worn_ids)
+
+    assert feel(client, user, shown, "good", [], [outside]).status_code == 422
+
+
+def test_taking_a_feeling_back_forgets_its_pieces(client, user, closet, stylist):
+    shown = today(client, user).json()
+    top_id = shown["garments"]["top"]["id"]
+    assert feel(client, user, shown, "good", [], [top_id]).json()["feeling_garment_ids"] == [top_id]
+
+    assert feel(client, user, shown, None).json()["feeling_garment_ids"] == []
+
+
+def test_a_garments_history_reaches_the_model(monkeypatch):
+    shirt = garment(GarmentCategory.TOP)
+    pants = garment(GarmentCategory.BOTTOM)
+    shoes = garment(GarmentCategory.SHOES)
+    prompts = []
+
+    def answer(model, prompt, schema, **_):
+        prompts.append(prompt)
+        return {"outfits": []}
+
+    monkeypatch.setattr("app.ai.openrouter.chat_json", answer)
+    candidates = select_candidates([shirt, pants, shoes], Occasion.CASUAL, None, TODAY)
+
+    sugerir_outfits(
+        candidates, Occasion.CASUAL, None, [], 3, history={shirt.id: {"comfortable": 2}}
+    )
+
+    assert '"history": {"comfortable": 2}' in prompts[0]
+    assert prompts[0].count('"history":') == 1
+
+
+def test_only_what_the_app_picked_is_flagged_as_off_occasion(client, db, user, closet, stylist):
+    plan = manual(client, user, closet, worn=False, occasion="formal").json()
+    shown = today(client, user, occasion="formal", day=TODAY + dt.timedelta(days=1)).json()
+
+    assert plan["off_occasion"] == []
+    assert shown["off_occasion"] != []

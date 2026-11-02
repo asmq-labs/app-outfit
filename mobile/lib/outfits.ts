@@ -32,6 +32,7 @@ export type Outfit = {
   forecast: { min_c: number; max_c: number; rain: boolean } | null;
   feeling: Feeling | null;
   feeling_reasons: string[];
+  feeling_garment_ids: string[];
 };
 
 export const OCCASIONS: { value: Occasion; label: string }[] = [
@@ -194,6 +195,10 @@ export function openFeeling(outfit: Outfit, feeling: Feeling, replace = false): 
       feeling,
       // Reasons only carry over when the sentiment stays the same.
       reasons: JSON.stringify(outfit.feeling === feeling ? outfit.feeling_reasons : []),
+      chosen: JSON.stringify(outfit.feeling === feeling ? outfit.feeling_garment_ids : []),
+      pieces: JSON.stringify(
+        Object.values(garmentIds(outfit.garments)).filter((id): id is string => Boolean(id))
+      ),
       rated: outfit.feeling ? '1' : '0',
       replace: replace ? '1' : '0',
     },
@@ -206,12 +211,13 @@ export function useSetFeeling(coords: Coords | null | undefined) {
       id: string;
       feeling: Feeling | null;
       reasons: string[];
+      garmentIds: string[];
       replace: boolean;
     }) => {
       const query = coordsQuery(coords).slice(1);
       const rated = await api<Outfit>(
         `/outfits/${ask.id}/feeling?${query}`,
-        jsonBody('PUT', { feeling: ask.feeling, reasons: ask.reasons })
+        jsonBody('PUT', { feeling: ask.feeling, reasons: ask.reasons, garment_ids: ask.garmentIds })
       );
       if (!ask.replace) return { outfit: rated, replaced: false };
       // The opinion is already kept, so running out of outfits only leaves this one on screen.
