@@ -35,6 +35,8 @@ class Formality(enum.StrEnum):
     CASUAL = "casual"
     SMART = "smart"
     FORMAL = "formal"
+    # Made for exercise; everyday sneakers stay casual.
+    SPORT = "sport"
 
 
 def text_enum(enum_class: type[enum.StrEnum]) -> Enum:

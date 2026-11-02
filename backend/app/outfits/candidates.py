@@ -21,6 +21,17 @@ FORMALITY_BY_OCCASION: dict[Occasion, set[Formality]] = {
     Occasion.NIGHT_OUT: {Formality.CASUAL, Formality.SMART},
     Occasion.WORK: {Formality.SMART, Formality.FORMAL},
     Occasion.FORMAL: {Formality.FORMAL, Formality.SMART},
+    Occasion.SPORT: {Formality.SPORT},
+}
+
+# What comes closest when the closet has nothing for the occasion, so gym clothes stay out of a
+# work day and dress shoes out of a workout for as long as anything else is available.
+NEAREST_FORMALITY: dict[Occasion, set[Formality]] = {
+    Occasion.CASUAL: {Formality.SMART},
+    Occasion.NIGHT_OUT: {Formality.FORMAL},
+    Occasion.WORK: {Formality.CASUAL},
+    Occasion.FORMAL: {Formality.CASUAL},
+    Occasion.SPORT: {Formality.CASUAL},
 }
 
 HOT_FROM_C = 25
@@ -93,6 +104,9 @@ def select_candidates(
     def fits_occasion(garment: Garment) -> bool:
         return garment.formality in formality
 
+    def nearly_fits_occasion(garment: Garment) -> bool:
+        return garment.formality in NEAREST_FORMALITY[occasion]
+
     def rested(garment: Garment) -> bool:
         return _is_rested(garment, day)
 
@@ -101,6 +115,8 @@ def select_candidates(
         (fits_weather, rested, fits_occasion),
         (fits_weather, fits_occasion),
         (fits_occasion,),
+        (fits_weather, nearly_fits_occasion),
+        (nearly_fits_occasion,),
         (fits_weather,),
         (),
     ]

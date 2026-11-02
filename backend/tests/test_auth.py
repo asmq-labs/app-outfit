@@ -111,6 +111,10 @@ def test_reusing_an_old_refresh_token_ends_the_session(client, db):
     session = client.post("/v1/auth/guest").json()
     old = {"refresh_token": session["refresh_token"]}
     current = client.post("/v1/auth/refresh", json=old).json()
+    # The phone got its answer: it went on to use the new token.
+    current = client.post(
+        "/v1/auth/refresh", json={"refresh_token": current["refresh_token"]}
+    ).json()
 
     long_ago = datetime.now(UTC) - REUSE_GRACE - timedelta(seconds=1)
     db.execute(
@@ -120,6 +124,36 @@ def test_reusing_an_old_refresh_token_ends_the_session(client, db):
     assert client.post("/v1/auth/refresh", json=old).status_code == 401
     still_valid = {"refresh_token": current["refresh_token"]}
     assert client.post("/v1/auth/refresh", json=still_valid).status_code == 401
+
+
+def test_guest_keeps_their_closet_when_a_refresh_answer_was_lost(client, db):
+    session = client.post("/v1/auth/guest").json()
+    old = {"refresh_token": session["refresh_token"]}
+    # The server rotated, but the answer never reached the phone.
+    assert client.post("/v1/auth/refresh", json=old).status_code == 200
+
+    long_ago = datetime.now(UTC) - REUSE_GRACE - timedelta(seconds=1)
+    db.execute(
+        update(RefreshToken).where(RefreshToken.used_at.is_not(None)).values(used_at=long_ago)
+    )
+
+    retried = client.post("/v1/auth/refresh", json=old)
+
+    assert retried.status_code == 200
+    assert retried.json()["user"]["id"] == session["user"]["id"]
+
+
+def test_a_signed_in_user_loses_the_session_on_any_old_token(client, db, make_id_token):
+    session = client.post("/v1/auth/google", json={"id_token": make_id_token()}).json()
+    old = {"refresh_token": session["refresh_token"]}
+    assert client.post("/v1/auth/refresh", json=old).status_code == 200
+
+    long_ago = datetime.now(UTC) - REUSE_GRACE - timedelta(seconds=1)
+    db.execute(
+        update(RefreshToken).where(RefreshToken.used_at.is_not(None)).values(used_at=long_ago)
+    )
+
+    assert client.post("/v1/auth/refresh", json=old).status_code == 401
 
 
 def test_expired_and_unknown_refresh_tokens_are_rejected(client, db):

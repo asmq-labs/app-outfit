@@ -13,6 +13,7 @@ OCCASION_DESCRIPTIONS = {
     Occasion.WORK: "a day at work or the office",
     Occasion.NIGHT_OUT: "going out with friends or on a date",
     Occasion.FORMAL: "a formal event",
+    Occasion.SPORT: "working out or playing a sport",
 }
 
 SLOTS = [category.value for category in GarmentCategory]

@@ -14,6 +14,7 @@ class Occasion(enum.StrEnum):
     WORK = "work"
     NIGHT_OUT = "night_out"
     FORMAL = "formal"
+    SPORT = "sport"
 
 
 def garment_slot() -> Mapped[uuid.UUID | None]:

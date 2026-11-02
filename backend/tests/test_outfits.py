@@ -53,6 +53,37 @@ def test_cold_days_leave_out_light_clothes_and_ask_for_a_layer():
     assert candidates.wants_outerwear is True
 
 
+def test_sport_uses_sport_clothes_and_other_occasions_leave_them_out():
+    gym = garment(GarmentCategory.BOTTOM, formality=Formality.SPORT)
+    jeans = garment(GarmentCategory.BOTTOM, formality=Formality.CASUAL)
+    trousers = garment(GarmentCategory.BOTTOM, formality=Formality.SMART)
+
+    sport = select_candidates([gym, jeans, trousers], Occasion.SPORT, MILD, TODAY)
+    work = select_candidates([gym, jeans, trousers], Occasion.WORK, MILD, TODAY)
+    casual = select_candidates([gym, jeans], Occasion.CASUAL, MILD, TODAY)
+
+    assert sport.by_category[GarmentCategory.BOTTOM] == [gym]
+    assert work.by_category[GarmentCategory.BOTTOM] == [trousers]
+    assert casual.by_category[GarmentCategory.BOTTOM] == [jeans]
+
+
+def test_sport_without_sport_clothes_prefers_casual_over_dress_pieces():
+    sneakers = garment(GarmentCategory.SHOES, formality=Formality.CASUAL)
+    dress_shoes = garment(GarmentCategory.SHOES, formality=Formality.FORMAL)
+
+    candidates = select_candidates([sneakers, dress_shoes], Occasion.SPORT, MILD, TODAY)
+
+    assert candidates.by_category[GarmentCategory.SHOES] == [sneakers]
+
+
+def test_sport_never_adds_an_optional_piece_off_the_occasion():
+    scarf = garment(GarmentCategory.ACCESSORY, formality=Formality.CASUAL)
+
+    candidates = select_candidates([scarf], Occasion.SPORT, MILD, TODAY)
+
+    assert candidates.by_category[GarmentCategory.ACCESSORY] == []
+
+
 def test_mild_dry_days_do_not_ask_for_a_layer():
     assert select_candidates([], Occasion.CASUAL, MILD, TODAY).wants_outerwear is False
 

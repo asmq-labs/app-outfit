@@ -103,6 +103,8 @@ def issue_tokens(db: Session, user: User, family_id: uuid.UUID | None = None) ->
             family_id=family_id or uuid.uuid4(),
             token_hash=hash_refresh_token(raw_token),
             expires_at=datetime.now(UTC) + timedelta(days=settings.refresh_token_days),
+            # The real moment, not the transaction's: rotation compares tokens by age.
+            created_at=datetime.now(UTC),
         )
     )
     db.commit()
@@ -128,20 +130,36 @@ def _revoke_family(db: Session, family_id: uuid.UUID) -> None:
     db.commit()
 
 
+def _was_succeeded(db: Session, token: RefreshToken) -> bool:
+    # A newer token already in use proves the phone got its answer to this one.
+    newer_in_use = db.scalar(
+        select(RefreshToken.id)
+        .where(
+            RefreshToken.family_id == token.family_id,
+            RefreshToken.created_at > token.created_at,
+            RefreshToken.used_at.is_not(None),
+        )
+        .limit(1)
+    )
+    return newer_in_use is not None
+
+
 def rotate_refresh_token(db: Session, raw_token: str) -> tuple[User, TokenPair]:
     now = datetime.now(UTC)
     token = _find_refresh_token(db, raw_token)
     if token is None or token.revoked_at is not None or token.expires_at <= now:
         raise InvalidRefreshTokenError
 
-    if token.used_at is not None and now - token.used_at > REUSE_GRACE:
-        # An old token showing up again means it was copied: end the whole session.
-        _revoke_family(db, token.family_id)
-        raise InvalidRefreshTokenError
-
     user = db.get(User, token.user_id)
     if user is None:
         raise InvalidRefreshTokenError
+
+    if token.used_at is not None and now - token.used_at > REUSE_GRACE:
+        # A guest has no login to come back with, so an answer lost on a bad connection must not
+        # cost them their closet. Anything else means the token was copied: end the session.
+        if not user.is_guest or _was_succeeded(db, token):
+            _revoke_family(db, token.family_id)
+            raise InvalidRefreshTokenError
 
     token.used_at = token.used_at or now
     return user, issue_tokens(db, user, family_id=token.family_id)
