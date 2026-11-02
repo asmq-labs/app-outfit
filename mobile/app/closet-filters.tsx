@@ -1,9 +1,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Platform, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChoiceChips } from '@/components/app/choice-chips';
 import { Segmented } from '@/components/app/segmented';
+import { SheetHandle } from '@/components/app/sheet-handle';
 import { Button } from '@/components/app/button';
 import { Text } from '@/components/ui/text';
 import {
@@ -60,10 +61,7 @@ export default function ClosetFiltersSheet() {
   return (
     <View className="bg-popover" style={{ paddingBottom: insets.bottom + 12 }}>
       <ScrollView className="shrink" contentContainerClassName="gap-5 p-5 pb-3">
-        {/* Material 3 drag handle; iOS draws its own grabber. */}
-        {Platform.OS === 'android' && (
-          <View className="-mt-2 h-1 w-8 self-center rounded-full bg-muted-foreground/40" />
-        )}
+        <SheetHandle />
         <Text className="font-serif-medium text-2xl">Ordenar y filtrar</Text>
 
         <Group label="Ordenar por">
@@ -86,7 +84,7 @@ export default function ClosetFiltersSheet() {
 
         {/* Single required choices above use segmented buttons; optional filters below use
             Material 3 filter chips at natural width, and tapping the selected one clears it. */}
-        <Group label="Abrigo">
+        <Group label="Nivel de abrigo">
           <ChoiceChips
             layout="wrap"
             options={WARMTH_OPTIONS}

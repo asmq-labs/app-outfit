@@ -1,6 +1,7 @@
 import { Pressable, View } from 'react-native';
 
 import { Text } from '@/components/ui/text';
+import { selectionFeedback } from '@/lib/haptics';
 import { cn } from '@/lib/utils';
 
 type SegmentedProps<T extends string> = {
@@ -20,7 +21,10 @@ export function Segmented<T extends string>({ options, selected, onSelect }: Seg
             key={value}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            onPress={() => onSelect(value)}
+            onPress={() => {
+              if (!active) selectionFeedback();
+              onSelect(value);
+            }}
             className={cn(
               'h-10 flex-1 items-center justify-center rounded-full',
               active && 'bg-background'

@@ -23,6 +23,14 @@ export {
   ErrorBoundary,
 } from 'expo-router';
 
+const SHEET = {
+  headerShown: false,
+  presentation: 'formSheet',
+  sheetAllowedDetents: 'fitToContents',
+  sheetGrabberVisible: true,
+  sheetCornerRadius: 24,
+} as const;
+
 function SessionGate({ children }: { children: React.ReactNode }) {
   const status = useSession((state) => state.status);
 
@@ -85,26 +93,9 @@ export default function RootLayout() {
             <Stack.Screen name="look/[id]" options={{ title: 'Look' }} />
             <Stack.Screen name="outfit/new" options={{ title: 'Outfit' }} />
             <Stack.Screen name="saved/[id]" options={{ title: 'Outfit guardado' }} />
-            <Stack.Screen
-              name="add-options"
-              options={{
-                headerShown: false,
-                presentation: 'formSheet',
-                sheetAllowedDetents: 'fitToContents',
-                sheetGrabberVisible: true,
-                sheetCornerRadius: 24,
-              }}
-            />
-            <Stack.Screen
-              name="closet-filters"
-              options={{
-                headerShown: false,
-                presentation: 'formSheet',
-                sheetAllowedDetents: 'fitToContents',
-                sheetGrabberVisible: true,
-                sheetCornerRadius: 24,
-              }}
-            />
+            <Stack.Screen name="add-options" options={SHEET} />
+            <Stack.Screen name="closet-filters" options={SHEET} />
+            <Stack.Screen name="confirm" options={SHEET} />
           </Stack>
         </SessionGate>
         <PortalHost />

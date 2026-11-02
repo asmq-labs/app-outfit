@@ -8,7 +8,7 @@ import {
   Trash2Icon,
 } from 'lucide-react-native';
 import * as React from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
 import { ChoiceChips } from '@/components/app/choice-chips';
 import { OutfitCollage } from '@/components/app/outfit-collage';
@@ -18,6 +18,7 @@ import { Spinner } from '@/components/app/spinner';
 import { Button } from '@/components/app/button';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
+import { askToConfirm } from '@/lib/confirm';
 import { type Garment, useGarmentImage } from '@/lib/garments';
 import { useCoords } from '@/lib/location';
 import {
@@ -101,20 +102,25 @@ function DayCell({
   const garment = outfit ? mainGarment(outfit) : null;
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${date.toLocaleDateString('es', { day: 'numeric', month: 'long' })}${
+        outfit?.worn ? ', con outfit registrado' : outfit?.planned ? ', con outfit planeado' : ''
+      }`}
+      accessibilityState={{ selected }}
       onPress={onPress}
       className={cn(
         'h-16 flex-1 items-center gap-1 rounded-xl pt-1.5',
         selected && 'bg-secondary',
         !inMonth && 'opacity-30'
       )}>
-      <Text
+      {/* Material 3 date pickers mark today with an outlined circle. */}
+      <View
         className={cn(
-          'text-sm',
-          isToday && 'font-sans-bold',
-          isToday && !selected && 'text-primary underline'
+          'h-6 w-6 items-center justify-center rounded-full',
+          isToday && 'border border-foreground'
         )}>
-        {date.getDate()}
-      </Text>
+        <Text className={cn('text-sm', isToday && 'font-sans-bold')}>{date.getDate()}</Text>
+      </View>
       {garment && outfit?.worn ? (
         <CellThumb garment={garment} />
       ) : outfit?.planned ? (
@@ -129,14 +135,12 @@ function DayOutfit({ outfit }: { outfit: Outfit }) {
   const occasion = OCCASIONS.find((option) => option.value === outfit.occasion)?.label;
 
   function confirmDelete(): void {
-    Alert.alert(
-      outfit.worn ? '¿Quitar este registro?' : '¿Quitar este plan?',
-      'Tus prendas no se tocan.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Quitar', style: 'destructive', onPress: () => remove.mutate(outfit.id) },
-      ]
-    );
+    askToConfirm({
+      title: outfit.worn ? '¿Quitar este registro?' : '¿Quitar este plan?',
+      body: 'Tus prendas no se tocan.',
+      action: 'Quitar',
+      onConfirm: () => remove.mutate(outfit.id),
+    });
   }
 
   return (
@@ -145,7 +149,11 @@ function DayOutfit({ outfit }: { outfit: Outfit }) {
         <Text className="font-sans-medium">
           {outfit.worn ? 'Te lo pusiste' : 'Planeado'} · {occasion}
         </Text>
-        <Pressable accessibilityLabel="Quitar" hitSlop={10} onPress={confirmDelete}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Quitar"
+          className="-mr-3 h-12 w-12 items-center justify-center"
+          onPress={confirmDelete}>
           <Icon as={Trash2Icon} size={18} className="text-muted-foreground" />
         </Pressable>
       </View>
@@ -255,13 +263,21 @@ export default function CalendarScreen() {
       <ScreenHeader title="Calendario" eyebrow="Lo que te pusiste y lo que planeas" />
       <ScrollView contentContainerClassName="gap-4 px-4 pb-10">
         <View className="flex-row items-center justify-between">
-          <Pressable accessibilityLabel="Mes anterior" hitSlop={12} onPress={() => shiftMonth(-1)}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Mes anterior"
+            className="-ml-3 h-12 w-12 items-center justify-center"
+            onPress={() => shiftMonth(-1)}>
             <Icon as={ChevronLeftIcon} size={22} />
           </Pressable>
           <Text className="font-sans-semibold text-lg">
             {capitalize(month.toLocaleDateString('es', { month: 'long', year: 'numeric' }))}
           </Text>
-          <Pressable accessibilityLabel="Mes siguiente" hitSlop={12} onPress={() => shiftMonth(1)}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Mes siguiente"
+            className="-mr-3 h-12 w-12 items-center justify-center"
+            onPress={() => shiftMonth(1)}>
             <Icon as={ChevronRightIcon} size={22} />
           </Pressable>
         </View>

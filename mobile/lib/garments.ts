@@ -42,8 +42,8 @@ export type GarmentEdit = {
 export const CATEGORY_OPTIONS = [
   { value: 'top', label: 'Parte de arriba' },
   { value: 'bottom', label: 'Parte de abajo' },
-  { value: 'one_piece', label: 'Pieza entera' },
-  { value: 'outerwear', label: 'Capa' },
+  { value: 'one_piece', label: 'Vestido o enterizo' },
+  { value: 'outerwear', label: 'Chaqueta o abrigo' },
   { value: 'shoes', label: 'Zapatos' },
   { value: 'accessory', label: 'Accesorio' },
 ] as const;

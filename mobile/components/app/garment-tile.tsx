@@ -1,11 +1,12 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { RotateCwIcon, Trash2Icon } from 'lucide-react-native';
-import { Alert, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Spinner } from '@/components/app/spinner';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
+import { askToConfirm } from '@/lib/confirm';
 import { type Garment, useDeleteGarment, useGarmentImage, useRetryGarment } from '@/lib/garments';
 
 const FAILURE_TEXT: Record<string, string> = {
@@ -24,14 +25,18 @@ export function GarmentTile({ garment }: { garment: Garment }) {
   }
 
   function confirmDelete(): void {
-    Alert.alert('¿Eliminar esta prenda?', 'Se borrará de tu armario.', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: () => remove.mutate(garment.id) },
-    ]);
+    askToConfirm({
+      title: '¿Eliminar esta prenda?',
+      body: 'Se borrará de tu armario.',
+      action: 'Eliminar',
+      onConfirm: () => remove.mutate(garment.id),
+    });
   }
 
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={garment.name ?? 'Prenda en proceso'}
       onPress={openDetail}
       onLongPress={confirmDelete}
       className="flex-1 overflow-hidden rounded-xl border border-border bg-white">

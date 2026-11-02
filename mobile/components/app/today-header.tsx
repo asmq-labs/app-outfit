@@ -1,6 +1,6 @@
 import { CloudRainIcon, CloudSunIcon, SunIcon } from 'lucide-react-native';
 import { View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/ui/icon';
@@ -30,7 +30,7 @@ function Weather({ forecast }: { forecast: NonNullable<Outfit['forecast']> }) {
       : CloudSunIcon;
   const range = `${Math.round(forecast.min_c)}° a ${Math.round(forecast.max_c)}°`;
   return (
-    <Animated.View entering={FadeInDown.duration(400).delay(150)}>
+    <Animated.View entering={FadeIn.duration(150)}>
       <View className="flex-row items-center gap-1.5 self-start rounded-full bg-secondary px-3 py-1.5">
         <Icon as={icon} size={15} />
         <Text className="text-sm">{forecast.rain ? `${range} · lluvia probable` : range}</Text>
@@ -46,12 +46,12 @@ export function TodayHeader({ forecast }: { forecast: Outfit['forecast'] }) {
 
   return (
     <View className="gap-2 px-4 pb-3" style={{ paddingTop: insets.top + 12 }}>
-      <Animated.View entering={FadeInDown.duration(400)}>
+      <View>
         <Text className="text-sm text-muted-foreground">{dateLabel()}</Text>
         <Text numberOfLines={1} className="font-serif-medium text-4xl leading-tight">
           {firstName ? `${greeting()}, ${firstName}` : greeting()}
         </Text>
-      </Animated.View>
+      </View>
       {forecast ? <Weather forecast={forecast} /> : <View className="h-8" />}
     </View>
   );

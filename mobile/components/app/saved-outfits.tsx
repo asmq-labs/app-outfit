@@ -9,8 +9,10 @@ import { type SavedOutfit, useSavedOutfits } from '@/lib/outfits';
 function SavedCard({ saved }: { saved: SavedOutfit }) {
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Ver outfit guardado"
       onPress={() => router.push({ pathname: '/saved/[id]', params: { id: saved.id } })}
-      className="aspect-[4/5] max-w-[49%] flex-1 overflow-hidden rounded-3xl border border-border active:opacity-80">
+      className="aspect-[4/5] max-w-[49%] flex-1 overflow-hidden rounded-3xl active:opacity-80">
       <OutfitCollage garments={saved.garments} size="thumb" />
     </Pressable>
   );

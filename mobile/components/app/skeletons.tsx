@@ -25,7 +25,7 @@ export function LookSkeleton() {
       </View>
       <View className="h-5 rounded-full bg-muted" />
       <View className="h-28 rounded-2xl bg-muted" />
-      <View className="h-12 rounded-md bg-muted" />
+      <View className="h-12 rounded-full bg-muted" />
     </Pulse>
   );
 }
@@ -34,7 +34,7 @@ export function OutfitSkeleton() {
   return (
     <Pulse style={{ flex: 1, gap: 16, padding: 16 }}>
       <View className="aspect-[3/4] rounded-3xl bg-muted" />
-      <View className="h-12 rounded-md bg-muted" />
+      <View className="h-12 rounded-full bg-muted" />
     </Pulse>
   );
 }

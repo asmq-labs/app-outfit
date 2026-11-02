@@ -27,6 +27,7 @@ export function ChoiceChips<T extends string>({
             key={value}
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
+            hitSlop={{ top: 4, bottom: 4 }}
             onPress={() => {
               if (!active) selectionFeedback();
               onSelect(value);

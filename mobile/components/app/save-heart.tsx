@@ -4,7 +4,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSequence,
-  withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 
 import { Icon } from '@/components/ui/icon';
@@ -28,7 +28,10 @@ export function SaveHeart({ outfit }: { outfit: Pick<Outfit, 'garments' | 'saved
       unsave.mutate(outfit.saved_id);
     } else {
       // A quick beat says "saved" before the server even answers.
-      scale.value = withSequence(withSpring(1.35, { duration: 160 }), withSpring(1));
+      scale.value = withSequence(
+        withTiming(1.2, { duration: 110 }),
+        withTiming(1, { duration: 140 })
+      );
       save.mutate(outfit.garments);
     }
   }

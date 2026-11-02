@@ -1,14 +1,17 @@
 import { Image } from 'expo-image';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
+import { useHeaderHeight, usePreventRemove } from 'expo-router/react-navigation';
 import * as React from 'react';
-import { Alert, ScrollView, View } from 'react-native';
-import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
+import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
+import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChoiceChips } from '@/components/app/choice-chips';
 import { GarmentSkeleton } from '@/components/app/skeletons';
 import { Button } from '@/components/app/button';
 import { Input } from '@/components/app/input';
 import { Text } from '@/components/ui/text';
+import { askToConfirm } from '@/lib/confirm';
 import {
   CATEGORY_OPTIONS,
   FORMALITY_OPTIONS,
@@ -20,6 +23,7 @@ import {
   useUpdateGarment,
   WARMTH_OPTIONS,
 } from '@/lib/garments';
+import { successFeedback } from '@/lib/haptics';
 import { useCoords } from '@/lib/location';
 import { useBuildAroundGarment } from '@/lib/outfits';
 
@@ -70,123 +74,178 @@ function GarmentForm({ garment }: { garment: Garment }) {
     form.size !== (garment.size ?? '') ||
     form.notes !== (garment.notes ?? '');
   const canSave = changed && form.name.trim().length > 0 && !update.isPending;
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const headerHeight = useHeaderHeight();
+  const [deleting, setDeleting] = React.useState(false);
+  const [discarded, setDiscarded] = React.useState<{ leave: () => void } | null>(null);
+
+  // Leaving with unsaved edits would lose them without a word.
+  usePreventRemove(changed && !deleting && !discarded, ({ data }) => {
+    askToConfirm({
+      title: '¿Descartar los cambios?',
+      body: 'Lo que cambiaste en esta prenda no se guardará.',
+      action: 'Descartar',
+      onConfirm: () => setDiscarded({ leave: () => navigation.dispatch(data.action) }),
+    });
+  });
+
+  // Leaves only after the guard above has been switched off by this render.
+  React.useEffect(() => discarded?.leave(), [discarded]);
 
   function save(): void {
-    update.mutate({ id: garment.id, changes: { ...form, name: form.name.trim() } });
+    update.mutate(
+      { id: garment.id, changes: { ...form, name: form.name.trim() } },
+      { onSuccess: successFeedback }
+    );
   }
 
   function confirmDelete(): void {
-    Alert.alert('¿Eliminar esta prenda?', 'Se borrará de tu armario.', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar',
-        style: 'destructive',
-        onPress: () => remove.mutate(garment.id, { onSuccess: () => router.back() }),
+    askToConfirm({
+      title: '¿Eliminar esta prenda?',
+      body: 'Se borrará de tu armario.',
+      action: 'Eliminar',
+      onConfirm: () => {
+        setDeleting(true);
+        remove.mutate(garment.id, {
+          onSuccess: () => router.back(),
+          onError: () => setDeleting(false),
+        });
       },
-    ]);
+    });
   }
 
   return (
-    <ScrollView
-      className="flex-1 bg-background"
-      contentContainerClassName="gap-5 p-4 pb-10"
-      keyboardShouldPersistTaps="handled">
-      <View className="aspect-square overflow-hidden rounded-2xl bg-white">
-        <Image source={image} contentFit="contain" style={{ flex: 1 }} transition={150} />
-      </View>
-      <Text className="text-center text-sm text-muted-foreground">{wearSummary(garment)}</Text>
-      {/* A basic was never photographed, so there is no original to show. */}
-      {!garment.basic_key && (
-        <Button variant="ghost" size="sm" onPress={() => setShowOriginal((value) => !value)}>
+    // Edge to edge, Android no longer shrinks the screen for the keyboard on its own.
+    <KeyboardAvoidingView
+      behavior="padding"
+      keyboardVerticalOffset={headerHeight}
+      className="flex-1 bg-background">
+      <ScrollView
+        contentContainerClassName="gap-5 p-4"
+        // Room for the save bar, which floats over the end of the form.
+        contentContainerStyle={{ paddingBottom: changed ? 120 : 40 }}
+        keyboardShouldPersistTaps="handled">
+        <View className="aspect-square overflow-hidden rounded-2xl bg-white">
+          <Image source={image} contentFit="contain" style={{ flex: 1 }} transition={150} />
+        </View>
+        <Text className="text-center text-sm text-muted-foreground">{wearSummary(garment)}</Text>
+        {/* A basic was never photographed, so there is no original to show. */}
+        {!garment.basic_key && (
+          <Button variant="ghost" size="sm" onPress={() => setShowOriginal((value) => !value)}>
+            <Text className="font-sans-semibold">
+              {showOriginal ? 'Ver imagen del armario' : 'Ver mi foto original'}
+            </Text>
+          </Button>
+        )}
+
+        <Field label="Nombre">
+          <Input
+            value={form.name}
+            onChangeText={(name) => setForm((current) => ({ ...current, name }))}
+            maxLength={120}
+            returnKeyType="done"
+          />
+        </Field>
+
+        <Field label="Tipo">
+          <ChoiceChips
+            layout="wrap"
+            options={CATEGORY_OPTIONS}
+            selected={form.category}
+            onSelect={(category) => setForm((current) => ({ ...current, category }))}
+          />
+        </Field>
+
+        <Field label="Nivel de abrigo">
+          <ChoiceChips
+            options={WARMTH_OPTIONS}
+            selected={form.warmth}
+            onSelect={(warmth) => setForm((current) => ({ ...current, warmth }))}
+          />
+        </Field>
+
+        <Field label="Formalidad">
+          <ChoiceChips
+            options={FORMALITY_OPTIONS}
+            selected={form.formality}
+            onSelect={(formality) => setForm((current) => ({ ...current, formality }))}
+          />
+        </Field>
+
+        {showDetails ? (
+          <Animated.View entering={FadeInDown.duration(250)} className="gap-5">
+            <View className="flex-row gap-3">
+              <View className="flex-1">
+                <Field label="Marca">
+                  <Input
+                    value={form.brand}
+                    onChangeText={(brand) => setForm((current) => ({ ...current, brand }))}
+                    maxLength={60}
+                  />
+                </Field>
+              </View>
+              <View className="w-28">
+                <Field label="Talla">
+                  <Input
+                    value={form.size}
+                    onChangeText={(size) => setForm((current) => ({ ...current, size }))}
+                    maxLength={20}
+                    autoCapitalize="characters"
+                  />
+                </Field>
+              </View>
+            </View>
+            <Field label="Notas">
+              <Input
+                value={form.notes}
+                onChangeText={(notes) => setForm((current) => ({ ...current, notes }))}
+                maxLength={500}
+                multiline
+                placeholder="Por ejemplo: lavar a mano"
+                style={{ textAlignVertical: 'top' }}
+              />
+            </Field>
+          </Animated.View>
+        ) : (
+          <Button variant="ghost" size="sm" onPress={() => setShowDetails(true)}>
+            <Text className="font-sans-semibold">Añadir marca, talla o notas</Text>
+          </Button>
+        )}
+
+        <Button
+          variant="outline"
+          size="lg"
+          disabled={buildAround.isPending}
+          onPress={() =>
+            buildAround.mutate(garment.id, { onSuccess: () => router.dismissTo('/') })
+          }>
           <Text className="font-sans-semibold">
-            {showOriginal ? 'Ver imagen del armario' : 'Ver mi foto original'}
+            {buildAround.isPending ? 'Armando…' : 'Armar un outfit con esta prenda'}
           </Text>
         </Button>
-      )}
-
-      <Field label="Nombre">
-        <Input
-          value={form.name}
-          onChangeText={(name) => setForm((current) => ({ ...current, name }))}
-          maxLength={120}
-          returnKeyType="done"
-        />
-      </Field>
-
-      <Field label="Tipo">
-        <ChoiceChips
-          layout="wrap"
-          options={CATEGORY_OPTIONS}
-          selected={form.category}
-          onSelect={(category) => setForm((current) => ({ ...current, category }))}
-        />
-      </Field>
-
-      <Field label="Abrigo">
-        <ChoiceChips
-          options={WARMTH_OPTIONS}
-          selected={form.warmth}
-          onSelect={(warmth) => setForm((current) => ({ ...current, warmth }))}
-        />
-      </Field>
-
-      <Field label="Formalidad">
-        <ChoiceChips
-          options={FORMALITY_OPTIONS}
-          selected={form.formality}
-          onSelect={(formality) => setForm((current) => ({ ...current, formality }))}
-        />
-      </Field>
-
-      {showDetails ? (
-        <Animated.View entering={FadeInDown.duration(250)} className="gap-5">
-          <View className="flex-row gap-3">
-            <View className="flex-1">
-              <Field label="Marca">
-                <Input
-                  value={form.brand}
-                  onChangeText={(brand) => setForm((current) => ({ ...current, brand }))}
-                  maxLength={60}
-                />
-              </Field>
-            </View>
-            <View className="w-28">
-              <Field label="Talla">
-                <Input
-                  value={form.size}
-                  onChangeText={(size) => setForm((current) => ({ ...current, size }))}
-                  maxLength={20}
-                  autoCapitalize="characters"
-                />
-              </Field>
-            </View>
-          </View>
-          <Field label="Notas">
-            <Input
-              value={form.notes}
-              onChangeText={(notes) => setForm((current) => ({ ...current, notes }))}
-              maxLength={500}
-              multiline
-              placeholder="Por ejemplo: lavar a mano"
-              style={{ textAlignVertical: 'top' }}
-            />
-          </Field>
-        </Animated.View>
-      ) : (
-        <Button variant="ghost" size="sm" onPress={() => setShowDetails(true)}>
-          <Text className="font-sans-semibold">Añadir marca, talla o notas</Text>
+        {buildAround.isError && (
+          <Text className="text-center text-sm text-muted-foreground">
+            Aún no hay prendas suficientes para combinarla.
+          </Text>
+        )}
+        <Button variant="ghost" onPress={confirmDelete}>
+          <Text className="text-destructive">Eliminar prenda</Text>
         </Button>
-      )}
+      </ScrollView>
 
-      {update.isError && (
-        <Text className="text-center text-sm text-destructive">
-          No pudimos guardar los cambios. Inténtalo de nuevo.
-        </Text>
-      )}
-
-      {/* Only shown once there is something to save, instead of a disabled button. */}
+      {/* Only shown once there is something to save, and always in sight while editing. */}
       {(changed || update.isPending) && (
-        <Animated.View entering={FadeInDown.duration(200)} exiting={FadeOut.duration(150)}>
+        <Animated.View
+          entering={FadeInDown.duration(200)}
+          exiting={FadeOutDown.duration(150)}
+          className="absolute inset-x-0 bottom-0 gap-2 border-t border-border bg-background px-4 pt-3"
+          style={{ paddingBottom: insets.bottom + 12 }}>
+          {update.isError && (
+            <Text className="text-center text-sm text-destructive">
+              No pudimos guardar los cambios. Inténtalo de nuevo.
+            </Text>
+          )}
           <Button size="lg" disabled={!canSave} onPress={save}>
             <Text className="font-sans-semibold">
               {update.isPending ? 'Guardando…' : 'Guardar cambios'}
@@ -194,24 +253,7 @@ function GarmentForm({ garment }: { garment: Garment }) {
           </Button>
         </Animated.View>
       )}
-      <Button
-        variant="outline"
-        size="lg"
-        disabled={buildAround.isPending}
-        onPress={() => buildAround.mutate(garment.id, { onSuccess: () => router.dismissTo('/') })}>
-        <Text className="font-sans-semibold">
-          {buildAround.isPending ? 'Armando…' : 'Armar un outfit con esta prenda'}
-        </Text>
-      </Button>
-      {buildAround.isError && (
-        <Text className="text-center text-sm text-muted-foreground">
-          Aún no hay prendas suficientes para combinarla.
-        </Text>
-      )}
-      <Button variant="ghost" onPress={confirmDelete}>
-        <Text className="text-destructive">Eliminar prenda</Text>
-      </Button>
-    </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

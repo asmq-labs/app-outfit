@@ -19,10 +19,6 @@ import { tapFeedback } from '@/lib/haptics';
 import { enqueuePhoto, pickFromGallery } from '@/lib/upload-queue';
 import { cn } from '@/lib/utils';
 
-function closeToCloset(): void {
-  router.dismissTo('/closet');
-}
-
 export default function AddGarmentsScreen() {
   const insets = useSafeAreaInsets();
   const camera = React.useRef<CameraView>(null);
@@ -56,16 +52,14 @@ export default function AddGarmentsScreen() {
 
   async function pickPhotos(): Promise<void> {
     const uris = await pickFromGallery();
-    if (uris.length === 0) return;
-    setAdded((count) => count + uris.length);
-    // Going straight to the closet shows the photos being analysed, so nobody picks them twice.
-    closeToCloset();
+    // Going straight back shows the photos being analysed, so nobody picks them twice.
+    if (uris.length > 0) router.back();
   }
 
   return (
     <View className="flex-1 bg-black" style={{ paddingTop: insets.top }}>
       <View className="flex-row items-center justify-between px-4 py-3">
-        <Pressable accessibilityLabel="Cerrar" hitSlop={12} onPress={closeToCloset}>
+        <Pressable accessibilityLabel="Cerrar" hitSlop={12} onPress={() => router.back()}>
           <Icon as={XIcon} size={26} className="text-white" />
         </Pressable>
         <Text className="font-sans-semibold text-white">
@@ -136,7 +130,7 @@ export default function AddGarmentsScreen() {
         <Pressable
           hitSlop={12}
           className={cn('w-16 items-center rounded-full py-2', added > 0 && 'bg-white')}
-          onPress={closeToCloset}>
+          onPress={() => router.back()}>
           <Text className={cn('font-sans-semibold', added > 0 ? 'text-black' : 'text-white')}>
             Listo
           </Text>

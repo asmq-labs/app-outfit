@@ -68,6 +68,8 @@ CI=1 npx expo export --platform android --output-dir <carpeta temporal>   # prue
   datos y sí van en línea).
 - UX: botones píldora de 48 dp, hojas inferiores en vez de menús desplegables, transiciones
   simétricas sin rebote, vibraciones suaves. Respaldar decisiones con Material 3, Apple HIG o NN/g.
+  Confirmaciones con `askToConfirm` (hoja inferior), nunca `Alert`. Animar con intención: las
+  pantallas rutinarias solo aparecen; la revelación del collage se reserva para Hoy.
 - El móvil solo habla con FastAPI por HTTP/JSON, nunca con proveedores de IA.
 - Tests en cada cambio del backend; commit y push al terminar cada paso.
 

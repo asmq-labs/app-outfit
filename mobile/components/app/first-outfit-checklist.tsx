@@ -1,7 +1,7 @@
 import { Link } from 'expo-router';
 import { CameraIcon, CheckIcon } from 'lucide-react-native';
 import { View } from 'react-native';
-import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import { Spinner } from '@/components/app/spinner';
 import { Button } from '@/components/app/button';
@@ -42,10 +42,10 @@ function StepRow({ step, done, index }: { step: Step; done: boolean; index: numb
         <View
           className={cn(
             'h-8 w-8 items-center justify-center rounded-full border-2',
-            done ? 'border-primary bg-primary' : 'border-border'
+            done ? 'border-primary bg-primary' : 'border-muted-foreground/50'
           )}>
           {done && (
-            <Animated.View entering={ZoomIn.springify().damping(12)}>
+            <Animated.View entering={FadeIn.duration(200)}>
               <Icon as={CheckIcon} size={16} className="text-primary-foreground" />
             </Animated.View>
           )}

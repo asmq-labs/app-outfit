@@ -5,8 +5,10 @@ export type Coords = { lat: number; lon: number };
 
 const LOCATION_TIMEOUT_MS = 5000;
 
-async function readCoords(): Promise<Coords | null> {
-  const { granted } = await Location.requestForegroundPermissionsAsync();
+async function readCoords(ask: boolean): Promise<Coords | null> {
+  const { granted } = ask
+    ? await Location.requestForegroundPermissionsAsync()
+    : await Location.getForegroundPermissionsAsync();
   if (!granted) return null;
 
   // City-level precision is enough for weather, so a recent known position is fine.
@@ -20,14 +22,17 @@ async function readCoords(): Promise<Coords | null> {
 }
 
 // undefined while still asking, null when the location is not available.
-export function useCoords(): Coords | null | undefined {
-  const [coords, setCoords] = React.useState<Coords | null | undefined>(undefined);
+// Only Hoy may ask, and only once there is an outfit whose weather matters.
+export function useCoords(ask = false, wait = false): Coords | null | undefined {
+  const [read, setRead] = React.useState<{ ask: boolean; coords: Coords | null } | null>(null);
 
   React.useEffect(() => {
-    readCoords()
+    if (wait) return;
+    readCoords(ask)
       .catch(() => null)
-      .then(setCoords);
-  }, []);
+      .then((coords) => setRead({ ask, coords }));
+  }, [ask, wait]);
 
-  return coords;
+  // A reading taken before asking must not pass for the answer, even for one render.
+  return read?.ask === ask ? read.coords : undefined;
 }

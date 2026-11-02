@@ -139,7 +139,7 @@ export default function BasicsScreen() {
     add.mutate([...selected], {
       onSuccess: () => {
         successFeedback();
-        router.dismissTo('/closet');
+        router.back();
       },
     });
   }

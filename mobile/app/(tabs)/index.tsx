@@ -1,7 +1,7 @@
 import { CheckIcon, RefreshCwIcon } from 'lucide-react-native';
 import * as React from 'react';
 import { View } from 'react-native';
-import Animated, { ZoomIn } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { ChoiceChips } from '@/components/app/choice-chips';
 import { FirstOutfitChecklist } from '@/components/app/first-outfit-checklist';
@@ -15,7 +15,7 @@ import { Button } from '@/components/app/button';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { ApiError } from '@/lib/api';
-import { type GarmentCategory, useGarments } from '@/lib/garments';
+import { type Garment, type GarmentCategory, useGarments } from '@/lib/garments';
 import { successFeedback, tapFeedback } from '@/lib/haptics';
 import { useCoords } from '@/lib/location';
 import {
@@ -25,17 +25,23 @@ import {
   useAnotherOutfit,
   useOccasion,
   useTodayOutfit,
+  useUnwearOutfit,
   useWearOutfit,
 } from '@/lib/outfits';
 
 const SLOT_TEXT: Record<GarmentCategory, string> = {
   top: 'parte de arriba',
   bottom: 'parte de abajo',
-  one_piece: 'pieza entera',
-  outerwear: 'capa',
+  one_piece: 'vestido o enterizo',
+  outerwear: 'chaqueta o abrigo',
   shoes: 'zapatos',
   accessory: 'accesorio',
 };
+
+function canDress(garments: Garment[]): boolean {
+  const has = new Set(garments.filter((g) => g.status === 'ready').map((g) => g.category));
+  return has.has('shoes') && (has.has('one_piece') || (has.has('top') && has.has('bottom')));
+}
 
 function offOccasionNote(outfit: Outfit): string | null {
   if (!outfit.off_occasion?.length) return null;
@@ -61,16 +67,18 @@ function Message({
 }
 
 export default function TodayScreen() {
-  const coords = useCoords();
+  const { data: garments = [], isLoading: loadingGarments } = useGarments();
+  // Asked when the first outfit is possible, so the weather has a reason to be needed.
+  const coords = useCoords(canDress(garments), loadingGarments);
   const { occasion, setOccasion } = useOccasion();
   const today = useTodayOutfit(occasion, coords);
   const another = useAnotherOutfit(coords);
   const wear = useWearOutfit(coords);
+  const unwear = useUnwearOutfit(coords);
 
   const outfit = today.data;
 
   // A failed attempt is only worth repeating once another garment has been catalogued.
-  const { data: garments = [] } = useGarments();
   const readyCount = garments.filter((garment) => garment.status === 'ready').length;
   React.useEffect(retryFailedOutfits, [readyCount]);
   const noMoreOutfits =
@@ -96,15 +104,18 @@ export default function TodayScreen() {
 
         {outfit ? (
           <>
-            <OutfitTransition outfitId={outfit.id} dimmed={another.isPending || switching}>
+            <OutfitTransition dimmed={another.isPending || switching}>
               <View className="flex-1">
-                <OutfitCollage garments={outfit.garments} />
+                {/* A new outfit is laid out whole, even when it shares pieces with the last one. */}
+                <OutfitCollage key={outfit.id} garments={outfit.garments} reveal />
                 <SaveHeart outfit={outfit} />
               </View>
 
-              <Text className="text-center font-serif-italic text-lg leading-6">
-                {outfit.explanation}
-              </Text>
+              <Animated.View key={outfit.id} entering={FadeIn.duration(200)}>
+                <Text className="text-center font-serif-italic text-lg leading-6">
+                  {outfit.explanation}
+                </Text>
+              </Animated.View>
             </OutfitTransition>
             {offOccasionNote(outfit) && (
               <Text className="text-center text-sm text-muted-foreground">
@@ -118,12 +129,24 @@ export default function TodayScreen() {
             )}
 
             {outfit.worn ? (
-              <Animated.View entering={ZoomIn.springify().damping(14)}>
-                <View className="h-12 flex-row items-center justify-center gap-2 rounded-md bg-secondary">
-                  <Icon as={CheckIcon} size={18} />
-                  <Text className="font-sans-medium">Hoy llevas este outfit</Text>
-                </View>
-              </Animated.View>
+              <View className="flex-row gap-3">
+                <Animated.View entering={FadeIn.duration(150)} className="flex-1">
+                  <View className="h-12 flex-row items-center justify-center gap-2 rounded-full bg-secondary">
+                    <Icon as={CheckIcon} size={18} />
+                    <Text className="font-sans-medium">Lo llevas hoy</Text>
+                  </View>
+                </Animated.View>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  disabled={unwear.isPending}
+                  onPress={() => {
+                    tapFeedback();
+                    unwear.mutate(outfit);
+                  }}>
+                  <Text className="font-sans-semibold">Deshacer</Text>
+                </Button>
+              </View>
             ) : (
               <View className="flex-row gap-3">
                 <Button
@@ -167,7 +190,7 @@ export default function TodayScreen() {
             <Text className="text-center font-serif-italic text-lg leading-6 text-muted-foreground">
               Armando tu outfit…
             </Text>
-            <View className="h-12 rounded-md bg-muted" />
+            <View className="h-12 rounded-full bg-muted" />
           </Pulse>
         )}
       </View>

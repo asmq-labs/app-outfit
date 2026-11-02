@@ -132,6 +132,20 @@ export function useWearOutfit(coords: Coords | null | undefined) {
   });
 }
 
+export function useUnwearOutfit(coords: Coords | null | undefined) {
+  return useMutation({
+    mutationFn: (outfit: Outfit) =>
+      api<Outfit>(`/outfits/${outfit.id}/unwear?${coordsQuery(coords).slice(1)}`, {
+        method: 'POST',
+      }),
+    onSuccess: (outfit) => {
+      queryClient.setQueryData(todayKey(outfit.occasion, outfit.day), outfit);
+      void refreshGarments();
+      void queryClient.invalidateQueries({ queryKey: CALENDAR_KEY });
+    },
+  });
+}
+
 export function useCalendar(start: string, end: string) {
   return useQuery({
     queryKey: [...CALENDAR_KEY, start, end],

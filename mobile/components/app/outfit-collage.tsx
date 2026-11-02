@@ -8,15 +8,15 @@ import type { Outfit } from '@/lib/outfits';
 import { cn } from '@/lib/utils';
 
 // Pieces arrive one after another, like clothes laid on a bed.
-const STAGGER_MS = 70;
+const STAGGER_MS = 40;
 
-type Slot = { garment: Garment; weight: number; order: number; size: ImageSize };
+type Slot = { garment: Garment; weight: number; order: number; size: ImageSize; reveal: boolean };
 
-function Piece({ garment, weight, order, size }: Slot) {
+function Piece({ garment, weight, order, size, reveal }: Slot) {
   const image = useGarmentImage(garment, { size });
   return (
     <Animated.View
-      entering={FadeInDown.duration(380).delay(order * STAGGER_MS)}
+      entering={reveal ? FadeInDown.duration(240).delay(order * STAGGER_MS) : undefined}
       style={{ flex: weight }}>
       <Pressable
         accessibilityLabel={garment.name ?? undefined}
@@ -51,20 +51,20 @@ const HEIGHT: Record<string, number> = {
   accessory: 0.7,
 };
 
-function toSlot(garment: Garment, size: ImageSize): Slot {
+function toSlot(garment: Garment, size: ImageSize, reveal: boolean): Slot {
   const category = garment.category ?? '';
-  return { garment, size, weight: HEIGHT[category] ?? 1, order: ORDER.indexOf(category) };
+  return { garment, size, reveal, weight: HEIGHT[category] ?? 1, order: ORDER.indexOf(category) };
 }
 
 const total = (column: Slot[]) => column.reduce((sum, slot) => sum + slot.weight, 0);
 
 // Long piece anchors the right column, upper body the left; shoes and accessory fill the shorter one.
-function layout(garments: Outfit['garments'], size: ImageSize): Slot[][] {
+function layout(garments: Outfit['garments'], size: ImageSize, reveal: boolean): Slot[][] {
   const { top, bottom, one_piece, outerwear, shoes, accessory } = garments;
-  const left: Slot[] = [outerwear, top].flatMap((g) => (g ? [toSlot(g, size)] : []));
-  const right: Slot[] = [one_piece ?? bottom].flatMap((g) => (g ? [toSlot(g, size)] : []));
+  const left: Slot[] = [outerwear, top].flatMap((g) => (g ? [toSlot(g, size, reveal)] : []));
+  const right: Slot[] = [one_piece ?? bottom].flatMap((g) => (g ? [toSlot(g, size, reveal)] : []));
   for (const garment of [shoes, accessory]) {
-    if (garment) (total(left) <= total(right) ? left : right).push(toSlot(garment, size));
+    if (garment) (total(left) <= total(right) ? left : right).push(toSlot(garment, size, reveal));
   }
   return [left, right].map((column) => column.sort((a, b) => a.order - b.order));
 }
@@ -74,17 +74,20 @@ function layout(garments: Outfit['garments'], size: ImageSize): Slot[][] {
 export function OutfitCollage({
   garments,
   size = 'full',
+  reveal = false,
 }: {
   garments: Outfit['garments'];
   size?: ImageSize;
+  // Only Hoy lays the pieces out: lists and detail screens just show them.
+  reveal?: boolean;
 }) {
   return (
     <View
       className={cn(
-        'flex-1 flex-row gap-1 rounded-3xl bg-white',
+        'flex-1 flex-row gap-1 rounded-3xl border border-border bg-white',
         size === 'thumb' ? 'p-1.5' : 'p-3'
       )}>
-      {layout(garments, size)
+      {layout(garments, size, reveal)
         .filter((column) => column.length > 0)
         .map((column) => (
           <Column key={column[0].garment.id} slots={column} />

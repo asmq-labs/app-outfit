@@ -22,8 +22,8 @@ import { cn } from '@/lib/utils';
 const SLOTS: { category: GarmentCategory; label: string }[] = [
   { category: 'top', label: 'Arriba' },
   { category: 'bottom', label: 'Abajo' },
-  { category: 'one_piece', label: 'Pieza entera' },
-  { category: 'outerwear', label: 'Capa' },
+  { category: 'one_piece', label: 'Vestido o enterizo' },
+  { category: 'outerwear', label: 'Chaqueta o abrigo' },
   { category: 'shoes', label: 'Zapatos' },
   { category: 'accessory', label: 'Accesorio' },
 ];
@@ -66,8 +66,8 @@ function select(current: Selection, garment: Garment): Selection {
 
 function missingHint(selection: Selection): string | null {
   const hasBase = selection.one_piece || (selection.top && selection.bottom);
-  if (!hasBase && !selection.shoes) return 'Elige una base y unos zapatos.';
-  if (!hasBase) return 'Falta la base: arriba y abajo, o una pieza entera.';
+  if (!hasBase && !selection.shoes) return 'Elige algo de arriba, de abajo y unos zapatos.';
+  if (!hasBase) return 'Falta algo de arriba y de abajo, o un vestido.';
   if (!selection.shoes) return 'Faltan los zapatos.';
   return null;
 }
@@ -84,6 +84,7 @@ function Tile({
   const image = useGarmentImage(garment, { size: 'thumb' });
   return (
     <Pressable
+      accessibilityRole="button"
       accessibilityLabel={garment.name ?? undefined}
       accessibilityState={{ selected }}
       onPress={onPress}

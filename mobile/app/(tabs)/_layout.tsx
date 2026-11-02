@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { CalendarDaysIcon, ShirtIcon, SparklesIcon, WandSparklesIcon } from 'lucide-react-native';
+import { CalendarDaysIcon, ShirtIcon, SunIcon, WandSparklesIcon } from 'lucide-react-native';
 
 import { TabButton } from '@/components/app/tab-button';
 import { Icon } from '@/components/ui/icon';
@@ -17,7 +17,7 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Hoy',
-          tabBarIcon: ({ color, size }) => <Icon as={SparklesIcon} color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Icon as={SunIcon} color={color} size={size} />,
         }}
       />
       <Tabs.Screen

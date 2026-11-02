@@ -1,11 +1,12 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Alert, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { OutfitCollage } from '@/components/app/outfit-collage';
 import { OutfitSkeleton } from '@/components/app/skeletons';
 import { Button } from '@/components/app/button';
 import { Text } from '@/components/ui/text';
 import { ApiError } from '@/lib/api';
+import { askToConfirm } from '@/lib/confirm';
 import { useCoords } from '@/lib/location';
 import {
   type SavedOutfit,
@@ -21,14 +22,12 @@ function Saved({ saved }: { saved: SavedOutfit }) {
     wearToday.error instanceof ApiError && wearToday.error.code === 'not_enough_garments';
 
   function confirmUnsave(): void {
-    Alert.alert('¿Quitar de guardados?', 'Tus prendas no se tocan.', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Quitar',
-        style: 'destructive',
-        onPress: () => unsave.mutate(saved.id, { onSuccess: () => router.back() }),
-      },
-    ]);
+    askToConfirm({
+      title: '¿Quitar de guardados?',
+      body: 'Tus prendas no se tocan.',
+      action: 'Quitar',
+      onConfirm: () => unsave.mutate(saved.id, { onSuccess: () => router.back() }),
+    });
   }
 
   return (

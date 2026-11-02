@@ -1,12 +1,13 @@
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Alert, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { OutfitCollage } from '@/components/app/outfit-collage';
 import { LookSkeleton } from '@/components/app/skeletons';
 import { Button } from '@/components/app/button';
 import { Text } from '@/components/ui/text';
 import { ApiError } from '@/lib/api';
+import { askToConfirm } from '@/lib/confirm';
 import {
   type Inspiration,
   useDeleteInspiration,
@@ -25,14 +26,12 @@ function Look({ inspiration }: { inspiration: Inspiration }) {
     wearToday.error instanceof ApiError && wearToday.error.code === 'not_enough_garments';
 
   function confirmDelete(): void {
-    Alert.alert('¿Eliminar este look?', 'Tu ropa no se toca.', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar',
-        style: 'destructive',
-        onPress: () => remove.mutate(inspiration.id, { onSuccess: () => router.back() }),
-      },
-    ]);
+    askToConfirm({
+      title: '¿Eliminar este look?',
+      body: 'Tu ropa no se toca.',
+      action: 'Eliminar',
+      onConfirm: () => remove.mutate(inspiration.id, { onSuccess: () => router.back() }),
+    });
   }
 
   return (

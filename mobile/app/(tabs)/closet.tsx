@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import { PlusIcon, SearchIcon, SlidersHorizontalIcon } from 'lucide-react-native';
 import * as React from 'react';
 import { FlatList, ScrollView, View } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { ChoiceChips } from '@/components/app/choice-chips';
 import { GarmentTile } from '@/components/app/garment-tile';
@@ -37,8 +36,8 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: 'all', label: 'Todo' },
   { value: 'top', label: 'Arriba' },
   { value: 'bottom', label: 'Abajo' },
-  { value: 'one_piece', label: 'Enteras' },
-  { value: 'outerwear', label: 'Capas' },
+  { value: 'outerwear', label: 'Chaquetas' },
+  { value: 'one_piece', label: 'Vestidos' },
   { value: 'shoes', label: 'Zapatos' },
   { value: 'accessory', label: 'Accesorios' },
 ];
@@ -67,7 +66,7 @@ function savedSummary(count: number): string {
 }
 
 function closetSummary(count: number): string {
-  if (count === 0) return 'Aquí vivirá tu ropa';
+  if (count === 0) return 'Sin prendas todavía';
   return count === 1 ? '1 prenda' : `${count} prendas`;
 }
 
@@ -180,13 +179,10 @@ export default function ClosetScreen() {
               // A FlatList cannot change its column count in place, so it remounts.
               key={columns}
               numColumns={columns}
-              renderItem={({ item, index }) => (
-                // Tiles cascade in; the cap keeps a long closet from waiting on its last rows.
-                <Animated.View
-                  entering={FadeIn.duration(300).delay(Math.min(index, 12) * 30)}
-                  style={{ flex: 1, maxWidth: TILE_WIDTH[columns], aspectRatio: 1 }}>
+              renderItem={({ item }) => (
+                <View style={{ flex: 1, maxWidth: TILE_WIDTH[columns], aspectRatio: 1 }}>
                   <GarmentTile garment={item} />
-                </Animated.View>
+                </View>
               )}
               columnWrapperClassName="gap-2"
               contentContainerClassName="grow gap-2 px-4 pb-28 pt-1"
