@@ -2,6 +2,8 @@ import json
 import uuid
 from dataclasses import dataclass
 
+from pydantic import BaseModel
+
 from app.ai import openrouter
 from app.config import get_settings
 from app.models import Garment, GarmentCategory, Occasion
@@ -51,7 +53,7 @@ person, which general style knowledge cannot know. Favor pieces that worked and 
 did not. When they ask for comfort, or for how they feel in something, decide from these counts \
 and not from fabric or cut; only without history for that piece may you judge by its description.
 
-"explanation": one short sentence, at most 20 words, in neutral Latin American Spanish, \
+"explanation": one short sentence, at most 16 words and 100 characters, in neutral Latin American Spanish, \
 addressing the person as "tú". Say the specific reason these pieces work together, naming colors \
 or textures, like "El beige ilumina y el verde oliva da contraste sin llamar la atención". Mention \
 the weather only when it decided the choice. No empty praise like "un estilo ideal". Talk about \
@@ -65,15 +67,35 @@ outfit. When personal history decided a piece, say so plainly, like "Este jean y
 cómodo"."""
 
 
-def _schema(by_ref: dict[str, Garment]) -> dict:
+# Three lines of the phrase on Hoy: past this it would start pushing the collage away.
+MAX_EXPLANATION_CHARS = 120
+
+
+def short_sentence(text: str, limit: int = MAX_EXPLANATION_CHARS) -> str:
+    # The prompt asks for brevity; only this guarantees it. Cuts at a full stop when it can.
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    end = max(cut.rfind(mark) for mark in ".!?")
+    if end >= limit // 2:
+        return cut[: end + 1]
+    return cut.rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
+def slot_schemas(by_ref: dict[str, Garment]) -> dict[str, dict]:
     # Each slot only admits that category's refs: the model sometimes answers with garment names.
-    slots = {
+    return {
         category.value: {
             "type": ["string", "null"],
             "enum": [*(ref for ref, g in by_ref.items() if g.category == category), None],
         }
         for category in GarmentCategory
     }
+
+
+def _schema(by_ref: dict[str, Garment]) -> dict:
+    slots = slot_schemas(by_ref)
     return {
         "type": "object",
         "properties": {
@@ -90,6 +112,20 @@ def _schema(by_ref: dict[str, Garment]) -> dict:
         "required": ["outfits"],
         "additionalProperties": False,
     }
+
+
+class _OutfitReply(BaseModel):
+    top: str | None = None
+    bottom: str | None = None
+    one_piece: str | None = None
+    outerwear: str | None = None
+    shoes: str | None = None
+    accessory: str | None = None
+    explanation: str = ""
+
+
+class _OutfitsReply(BaseModel):
+    outfits: list[_OutfitReply]
 
 
 @dataclass(frozen=True)
@@ -181,14 +217,15 @@ def sugerir_outfits(
         seen=json.dumps([sorted(ref_of[i] for i in combo if i in ref_of) for combo in seen]),
     )
     data = openrouter.chat_json(get_settings().outfit_model, prompt, _schema(by_ref))
+    reply = openrouter.validated(_OutfitsReply, data)
 
     choices = []
-    for raw in data.get("outfits", []):
+    for raw in reply.outfits:
         garment_ids: dict[GarmentCategory, uuid.UUID | None] = {}
         for category in GarmentCategory:
-            garment = by_ref.get(raw.get(category.value) or "")
+            garment = by_ref.get(getattr(raw, category.value) or "")
             # A ref used in the wrong slot is dropped rather than trusted.
             valid = garment is not None and garment.category == category
             garment_ids[category] = garment.id if valid else None
-        choices.append(OutfitChoice(garment_ids, str(raw.get("explanation", "")).strip()))
+        choices.append(OutfitChoice(garment_ids, short_sentence(raw.explanation)))
     return choices

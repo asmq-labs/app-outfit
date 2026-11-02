@@ -2,8 +2,10 @@ import json
 import uuid
 from dataclasses import dataclass
 
+from pydantic import BaseModel
+
 from app.ai import openrouter
-from app.ai.outfits import SLOTS, describe_garment
+from app.ai.outfits import SLOTS, describe_garment, short_sentence, slot_schemas
 from app.config import get_settings
 from app.models import Garment, GarmentCategory
 
@@ -22,29 +24,49 @@ addressing the person as "tú", saying how their version captures the look. Ment
 garments you picked. No emojis, no refs.
 If the photo does not show an outfit or clothing, set is_look to false."""
 
-_SLOT_SCHEMA = {"type": ["string", "null"]}
-SCHEMA = {
-    "type": "object",
-    "properties": {
-        "is_look": {"type": "boolean"},
-        **dict.fromkeys(SLOTS, _SLOT_SCHEMA),
-        "missing": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "category": {"type": "string", "enum": SLOTS},
-                    "name": {"type": "string"},
+MAX_EXPLANATION_CHARS = 170
+
+
+def _schema(by_ref: dict[str, Garment]) -> dict:
+    return {
+        "type": "object",
+        "properties": {
+            "is_look": {"type": "boolean"},
+            **slot_schemas(by_ref),
+            "missing": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "category": {"type": "string", "enum": SLOTS},
+                        "name": {"type": "string"},
+                    },
+                    "required": ["category", "name"],
+                    "additionalProperties": False,
                 },
-                "required": ["category", "name"],
-                "additionalProperties": False,
             },
+            "explanation": {"type": "string"},
         },
-        "explanation": {"type": "string"},
-    },
-    "required": ["is_look", *SLOTS, "missing", "explanation"],
-    "additionalProperties": False,
-}
+        "required": ["is_look", *SLOTS, "missing", "explanation"],
+        "additionalProperties": False,
+    }
+
+
+class _MissingReply(BaseModel):
+    category: GarmentCategory
+    name: str
+
+
+class _LookReply(BaseModel):
+    is_look: bool
+    top: str | None = None
+    bottom: str | None = None
+    one_piece: str | None = None
+    outerwear: str | None = None
+    shoes: str | None = None
+    accessory: str | None = None
+    missing: list[_MissingReply] = []
+    explanation: str = ""
 
 
 @dataclass(frozen=True)
@@ -69,24 +91,18 @@ def extraer_estilo(photo: bytes, closet: list[Garment]) -> LookMatch:
             ensure_ascii=False,
         )
     )
-    data = openrouter.chat_json(get_settings().vision_model, prompt, SCHEMA, image=photo)
+    data = openrouter.chat_json(get_settings().vision_model, prompt, _schema(by_ref), image=photo)
+    reply = openrouter.validated(_LookReply, data)
 
     garment_ids: dict[GarmentCategory, uuid.UUID | None] = {}
     for category in GarmentCategory:
-        garment = by_ref.get(data.get(category.value) or "")
+        garment = by_ref.get(getattr(reply, category.value) or "")
         # A ref used in the wrong slot is dropped rather than trusted.
         valid = garment is not None and garment.category == category
         garment_ids[category] = garment.id if valid else None
-    try:
-        missing = [
-            MissingPiece(GarmentCategory(item["category"]), str(item["name"])[:80])
-            for item in data.get("missing", [])
-        ]
-    except (KeyError, TypeError, ValueError) as exc:
-        raise openrouter.AIError(f"invalid look match: {data}") from exc
     return LookMatch(
-        is_look=bool(data.get("is_look")),
+        is_look=reply.is_look,
         garment_ids=garment_ids,
-        missing=missing,
-        explanation=str(data.get("explanation", "")).strip(),
+        missing=[MissingPiece(item.category, item.name[:80]) for item in reply.missing],
+        explanation=short_sentence(reply.explanation, MAX_EXPLANATION_CHARS),
     )

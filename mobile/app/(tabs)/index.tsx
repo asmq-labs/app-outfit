@@ -50,11 +50,11 @@ function canDress(garments: Garment[]): boolean {
 
 function offOccasionNote(outfit: Outfit): string | null {
   if (!outfit.off_occasion?.length) return null;
-  const slots = outfit.off_occasion.map((category) => SLOT_TEXT[category]);
-  const list =
-    slots.length === 1 ? slots[0] : `${slots.slice(0, -1).join(', ')} ni ${slots.at(-1)}`;
   const occasion = OCCASIONS.find((option) => option.value === outfit.occasion)?.label;
-  return `Aún no tienes ${list} para «${occasion}», así que usamos lo más cercano.`;
+  // One sentence that always fits two lines, however many pieces are missing.
+  return outfit.off_occasion.length === 1
+    ? `Aún no tienes ${SLOT_TEXT[outfit.off_occasion[0]]} para «${occasion}»; usamos lo más cercano.`
+    : `Tu armario tiene poco para «${occasion}»; usamos lo más cercano.`;
 }
 
 function Message({
@@ -133,13 +133,14 @@ export default function TodayScreen() {
               </View>
 
               <Animated.View key={outfit.id} entering={FadeIn.duration(200)}>
-                <Text className="text-center font-serif-italic text-lg leading-6">
+                {/* The server caps its length; this keeps the collage safe on any phone or font size. */}
+                <Text numberOfLines={3} className="text-center font-serif-italic text-lg leading-6">
                   {outfit.explanation}
                 </Text>
               </Animated.View>
             </OutfitTransition>
             {!outfit.worn && offOccasionNote(outfit) && (
-              <Text className="text-center text-sm text-muted-foreground">
+              <Text numberOfLines={2} className="text-center text-sm text-muted-foreground">
                 {offOccasionNote(outfit)}
               </Text>
             )}

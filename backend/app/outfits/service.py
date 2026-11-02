@@ -1,5 +1,6 @@
 import collections
 import datetime as dt
+import logging
 import uuid
 
 from sqlalchemy import ColumnElement, and_, or_, select
@@ -19,6 +20,8 @@ from app.models import (
 )
 from app.outfits.candidates import Candidates, select_candidates
 from app.outfits.weather import Forecast
+
+logger = logging.getLogger(__name__)
 
 # Outfits generated per model call: today's pick plus ready-made answers to "otra".
 BATCH_SIZE = 3
@@ -211,7 +214,8 @@ def _generate(
             feelings=_recent_feelings(db, user),
             history=_garment_history(db, user),
         )
-    except AIError:
+    except AIError as exc:
+        logger.warning("outfit model failed, using the fallback: %s", exc)
         choices = []
     must_answer = not existing or around is not None or fresh
     if must_answer:
