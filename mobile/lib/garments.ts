@@ -3,7 +3,7 @@ import { File, UploadType } from 'expo-file-system';
 
 import { api, jsonBody } from '@/lib/api';
 import { API_URL } from '@/lib/config';
-import { queryClient } from '@/lib/query';
+import { queryClient, REPORT_FAILURE } from '@/lib/query';
 import { getAccessToken, useSession } from '@/lib/session';
 
 export type GarmentStatus = 'processing' | 'ready' | 'failed';
@@ -83,21 +83,28 @@ export function useRetryGarment() {
   return useMutation({
     mutationFn: (id: string) => api<Garment>(`/garments/${id}/retry`, { method: 'POST' }),
     onSettled: refreshGarments,
+    meta: REPORT_FAILURE,
   });
+}
+
+// A garment appears in outfits, saved combinations, the calendar and looks, so all of them reload.
+function refreshAll(): Promise<void> {
+  return queryClient.invalidateQueries();
 }
 
 export function useUpdateGarment() {
   return useMutation({
     mutationFn: ({ id, changes }: { id: string; changes: GarmentEdit }) =>
       api<Garment>(`/garments/${id}`, jsonBody('PATCH', changes)),
-    onSettled: refreshGarments,
+    onSettled: refreshAll,
   });
 }
 
 export function useDeleteGarment() {
   return useMutation({
     mutationFn: (id: string) => api<void>(`/garments/${id}`, { method: 'DELETE' }),
-    onSettled: refreshGarments,
+    onSettled: refreshAll,
+    meta: REPORT_FAILURE,
   });
 }
 

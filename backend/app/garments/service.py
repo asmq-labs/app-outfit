@@ -9,7 +9,9 @@ from app import jobs
 from app.ai.garments import GarmentAnalysis
 from app.config import get_settings
 from app.garments.images import make_thumbnail, normalize_photo, thumbnail_path
+from app.inspirations import service as inspiration_service
 from app.models import Garment, GarmentStatus, User
+from app.outfits import service as outfit_service
 from app.storage import Storage
 
 PROCESS_JOB = "process_garment"
@@ -92,6 +94,9 @@ def get_for_user(db: Session, user: User, garment_id: uuid.UUID) -> Garment:
 
 
 def update(db: Session, garment: Garment, changes: dict[str, Any]) -> Garment:
+    if changes.get("category", garment.category) != garment.category:
+        # Its outfits hold it in a slot it no longer belongs to.
+        outfit_service.release_garment(db, garment)
     for field, value in changes.items():
         setattr(garment, field, value)
     db.commit()
@@ -110,6 +115,8 @@ def retry(db: Session, garment: Garment) -> Garment:
 
 def delete(db: Session, storage: Storage, garment: Garment) -> None:
     paths = [path for path in (garment.original_path, garment.image_path) if path]
+    outfit_service.forget_garment(db, garment)
+    inspiration_service.mark_missing(db, garment)
     db.delete(garment)
     db.commit()
     for path in paths:

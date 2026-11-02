@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app import jobs
 from app.config import get_settings
 from app.garments.images import normalize_photo, thumbnail_path
-from app.models import Inspiration, User
+from app.models import Garment, Inspiration, User
 from app.storage import Storage
 
 MATCH_JOB = "match_inspiration"
@@ -58,6 +58,16 @@ def get_for_user(db: Session, user: User, inspiration_id: uuid.UUID) -> Inspirat
     if inspiration is None or inspiration.user_id != user.id:
         raise InspirationNotFoundError
     return inspiration
+
+
+def mark_missing(db: Session, garment: Garment) -> None:
+    # The look still asks for that piece, and now the closet lacks it.
+    looks = db.scalars(select(Inspiration).where(Inspiration.user_id == garment.user_id))
+    for look in looks:
+        for category, slot in look.garment_ids().items():
+            if slot == garment.id and garment.name:
+                piece = {"category": category.value, "name": garment.name}
+                look.missing = [*(look.missing or []), piece]
 
 
 def delete(db: Session, storage: Storage, inspiration: Inspiration) -> None:

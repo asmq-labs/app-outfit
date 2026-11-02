@@ -18,7 +18,7 @@ import { Spinner } from '@/components/app/spinner';
 import { Button } from '@/components/app/button';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
-import { askToConfirm } from '@/lib/confirm';
+import { askToConfirm, tellFailure } from '@/lib/confirm';
 import { type Garment, useGarmentImage } from '@/lib/garments';
 import { useCoords } from '@/lib/location';
 import {
@@ -133,6 +133,8 @@ function DayCell({
 function DayOutfit({ outfit }: { outfit: Outfit }) {
   const remove = useDeleteOutfit();
   const occasion = OCCASIONS.find((option) => option.value === outfit.occasion)?.label;
+  const { top, bottom, one_piece, shoes } = outfit.garments;
+  const lostPieces = !(one_piece || (top && bottom)) || !shoes;
 
   function confirmDelete(): void {
     askToConfirm({
@@ -160,6 +162,11 @@ function DayOutfit({ outfit }: { outfit: Outfit }) {
       <View className="h-64">
         <OutfitCollage garments={outfit.garments} />
       </View>
+      {lostPieces && (
+        <Text className="text-center text-sm text-muted-foreground">
+          Algunas prendas de este día ya no están en tu armario.
+        </Text>
+      )}
     </View>
   );
 }
@@ -172,7 +179,7 @@ function DaySuggestion({ day }: { day: string }) {
   const suggestion = useDayOutfit(day, occasion, coords, asked);
   const another = useAnotherOutfit(coords);
   const plan = useCreateOutfit();
-  const outfit = suggestion.data;
+  const outfit = suggestion.isError ? undefined : suggestion.data;
 
   if (!asked) {
     return (
@@ -196,7 +203,7 @@ function DaySuggestion({ day }: { day: string }) {
             <Button
               variant="outline"
               disabled={another.isPending || plan.isPending}
-              onPress={() => another.mutate(outfit)}>
+              onPress={() => another.mutate(outfit, { onError: tellFailure })}>
               {another.isPending ? <Spinner size="small" /> : <Icon as={RefreshCwIcon} size={16} />}
               <Text className="font-sans-semibold">Otra</Text>
             </Button>
@@ -204,7 +211,10 @@ function DaySuggestion({ day }: { day: string }) {
               className="flex-1"
               disabled={another.isPending || plan.isPending}
               onPress={() =>
-                plan.mutate({ day, occasion, worn: false, garments: garmentIds(outfit.garments) })
+                plan.mutate(
+                  { day, occasion, worn: false, garments: garmentIds(outfit.garments) },
+                  { onError: tellFailure }
+                )
               }>
               <Text className="font-sans-semibold">
                 {plan.isPending ? 'Guardando…' : 'Planearlo'}

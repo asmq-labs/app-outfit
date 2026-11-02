@@ -16,6 +16,7 @@ import { Button } from '@/components/app/button';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { ApiError } from '@/lib/api';
+import { tellFailure } from '@/lib/confirm';
 import { type Garment, type GarmentCategory, useGarments } from '@/lib/garments';
 import { successFeedback, tapFeedback } from '@/lib/haptics';
 import { useCoords } from '@/lib/location';
@@ -77,8 +78,6 @@ export default function TodayScreen() {
   const wear = useWearOutfit(coords);
   const unwear = useUnwearOutfit(coords);
 
-  const outfit = today.data;
-
   // A failed attempt is only worth repeating once another garment has been catalogued.
   const readyCount = garments.filter((garment) => garment.status === 'ready').length;
   React.useEffect(retryFailedOutfits, [readyCount]);
@@ -87,6 +86,8 @@ export default function TodayScreen() {
   const switching = today.isPlaceholderData;
   const needsGarments =
     today.error instanceof ApiError && today.error.code === 'not_enough_garments';
+  // After deleting clothes, the last outfit stays cached but its garments may be gone.
+  const outfit = needsGarments ? undefined : today.data;
   const busy = another.isPending || wear.isPending || switching;
 
   function changeOccasion(next: typeof occasion): void {
@@ -157,7 +158,14 @@ export default function TodayScreen() {
                   disabled={busy || noMoreOutfits}
                   onPress={() => {
                     tapFeedback();
-                    another.mutate(outfit);
+                    another.mutate(outfit, {
+                      // Running out of combinations has its own message above.
+                      onError: (error) => {
+                        if (!(error instanceof ApiError && error.code === 'no_more_outfits')) {
+                          tellFailure();
+                        }
+                      },
+                    });
                   }}>
                   {another.isPending ? (
                     <Spinner size="small" />

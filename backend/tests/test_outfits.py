@@ -493,6 +493,116 @@ def test_a_saved_outfit_can_be_worn_today_and_deleted(client, user, closet, styl
     assert client.get("/v1/saved-outfits", headers=user).json() == []
 
 
+def combination(closet) -> dict[str, str]:
+    top, _, bottom, _, shoes = closet
+    return {"top": str(top.id), "bottom": str(bottom.id), "shoes": str(shoes.id)}
+
+
+def closet_ids(client, headers) -> set[str]:
+    return {item["id"] for item in client.get("/v1/garments", headers=headers).json()}
+
+
+def add_accessory(db, closet):
+    accessory = garment(GarmentCategory.ACCESSORY)
+    accessory.user_id = closet[0].user_id
+    db.add(accessory)
+    db.commit()
+    return accessory
+
+
+def test_deleting_a_saved_outfit_keeps_its_garments(client, user, closet):
+    before = closet_ids(client, user)
+    saved = client.post(
+        "/v1/saved-outfits", json={"garments": combination(closet)}, headers=user
+    ).json()
+
+    client.delete(f"/v1/saved-outfits/{saved['id']}", headers=user)
+
+    assert closet_ids(client, user) == before
+
+
+def test_deleting_a_needed_garment_removes_the_saved_outfit_whole(client, user, closet):
+    client.post("/v1/saved-outfits", json={"garments": combination(closet)}, headers=user)
+
+    client.delete(f"/v1/garments/{closet[0].id}", headers=user)
+
+    assert client.get("/v1/saved-outfits", headers=user).json() == []
+    assert str(closet[4].id) in closet_ids(client, user)
+
+
+def test_deleting_an_optional_piece_keeps_the_saved_outfit(client, db, user, closet):
+    accessory = add_accessory(db, closet)
+    garments = {**combination(closet), "accessory": str(accessory.id)}
+    client.post("/v1/saved-outfits", json={"garments": garments}, headers=user)
+
+    client.delete(f"/v1/garments/{accessory.id}", headers=user)
+
+    [saved] = client.get("/v1/saved-outfits", headers=user).json()
+    assert saved["garments"]["accessory"] is None
+    assert saved["garments"]["top"] is not None
+
+
+def test_saved_outfits_that_become_identical_merge_into_one(client, db, user, closet):
+    accessory = add_accessory(db, closet)
+    garments = combination(closet)
+    client.post("/v1/saved-outfits", json={"garments": garments}, headers=user)
+    with_accessory = {**garments, "accessory": str(accessory.id)}
+    client.post("/v1/saved-outfits", json={"garments": with_accessory}, headers=user)
+
+    client.delete(f"/v1/garments/{accessory.id}", headers=user)
+
+    assert len(client.get("/v1/saved-outfits", headers=user).json()) == 1
+
+
+def test_deleting_a_needed_garment_cancels_the_plan_but_keeps_the_history(client, user, closet):
+    garments = combination(closet)
+    for day, worn in ((TODAY, True), (TODAY + dt.timedelta(days=2), False)):
+        body = {"day": str(day), "occasion": "casual", "worn": worn, "garments": garments}
+        client.post("/v1/outfits", json=body, headers=user)
+
+    client.delete(f"/v1/garments/{closet[0].id}", headers=user)
+
+    query = {"start": str(TODAY), "end": str(TODAY + dt.timedelta(days=7))}
+    [worn] = client.get("/v1/outfits/calendar", params=query, headers=user).json()
+    assert worn["worn"] is True
+    assert worn["garments"]["top"] is None
+    assert worn["garments"]["shoes"] is not None
+
+
+def test_a_worn_outfit_goes_away_with_its_last_garment(client, user, closet):
+    body = {"day": str(TODAY), "occasion": "casual", "worn": True, "garments": combination(closet)}
+    client.post("/v1/outfits", json=body, headers=user)
+
+    top, _, bottom, _, shoes = closet
+    for item in (top, bottom):
+        client.delete(f"/v1/garments/{item.id}", headers=user)
+    query = {"start": str(TODAY), "end": str(TODAY)}
+    assert len(client.get("/v1/outfits/calendar", params=query, headers=user).json()) == 1
+
+    client.delete(f"/v1/garments/{shoes.id}", headers=user)
+    assert client.get("/v1/outfits/calendar", params=query, headers=user).json() == []
+
+
+def test_changing_a_garments_category_takes_it_out_of_its_outfits(client, user, closet, stylist):
+    client.post("/v1/saved-outfits", json={"garments": combination(closet)}, headers=user)
+    outfit = today(client, user).json()
+    moved = outfit["garments"]["top"]["id"]
+
+    client.patch(f"/v1/garments/{closet[0].id}", json={"category": "outerwear"}, headers=user)
+    client.patch(f"/v1/garments/{moved}", json={"category": "outerwear"}, headers=user)
+
+    assert client.get("/v1/saved-outfits", headers=user).json() == []
+    assert today(client, user).json()["id"] != outfit["id"]
+
+
+def test_renaming_a_garment_keeps_its_outfits(client, user, closet):
+    client.post("/v1/saved-outfits", json={"garments": combination(closet)}, headers=user)
+
+    client.patch(f"/v1/garments/{closet[0].id}", json={"name": "Otra"}, headers=user)
+
+    assert len(client.get("/v1/saved-outfits", headers=user).json()) == 1
+
+
 def test_only_wearable_outfits_can_be_saved(client, user, closet):
     top, _, bottom, _, _ = closet
     garments = {"top": str(top.id), "bottom": str(bottom.id)}

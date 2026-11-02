@@ -5,41 +5,23 @@ import { OutfitCollage } from '@/components/app/outfit-collage';
 import { OutfitSkeleton } from '@/components/app/skeletons';
 import { Button } from '@/components/app/button';
 import { Text } from '@/components/ui/text';
-import { ApiError } from '@/lib/api';
-import { askToConfirm } from '@/lib/confirm';
 import { useCoords } from '@/lib/location';
 import {
   type SavedOutfit,
+  useConfirmDeleteOutfit,
   useSavedOutfits,
-  useUnsaveOutfit,
   useWearSavedToday,
 } from '@/lib/outfits';
 
 function Saved({ saved }: { saved: SavedOutfit }) {
   const wearToday = useWearSavedToday(useCoords());
-  const unsave = useUnsaveOutfit();
-  const notEnough =
-    wearToday.error instanceof ApiError && wearToday.error.code === 'not_enough_garments';
-
-  function confirmUnsave(): void {
-    askToConfirm({
-      title: '¿Quitar de guardados?',
-      body: 'Tus prendas no se tocan.',
-      action: 'Quitar',
-      onConfirm: () => unsave.mutate(saved.id, { onSuccess: () => router.back() }),
-    });
-  }
+  const confirmDelete = useConfirmDeleteOutfit(saved.id);
 
   return (
     <ScrollView className="flex-1 bg-background" contentContainerClassName="gap-4 p-4 pb-10">
       <View className="aspect-[3/4]">
         <OutfitCollage garments={saved.garments} />
       </View>
-      {notEnough && (
-        <Text className="text-center text-sm text-muted-foreground">
-          Alguna prenda de este outfit ya no está en tu armario.
-        </Text>
-      )}
       <Button
         size="lg"
         disabled={wearToday.isPending}
@@ -48,8 +30,8 @@ function Saved({ saved }: { saved: SavedOutfit }) {
           {wearToday.isPending ? 'Preparando…' : 'Usarlo hoy'}
         </Text>
       </Button>
-      <Button variant="ghost" onPress={confirmUnsave}>
-        <Text className="text-destructive">Quitar de guardados</Text>
+      <Button variant="ghost" onPress={() => confirmDelete(() => router.back())}>
+        <Text className="text-destructive">Eliminar outfit</Text>
       </Button>
     </ScrollView>
   );
@@ -71,8 +53,11 @@ export default function SavedOutfitScreen() {
   }
 
   return (
-    <View className="flex-1 items-center justify-center bg-background px-8">
+    <View className="flex-1 items-center justify-center gap-4 bg-background px-8">
       <Text className="text-center">Este outfit ya no existe.</Text>
+      <Button variant="outline" onPress={() => router.back()}>
+        <Text className="font-sans-semibold">Volver</Text>
+      </Button>
     </View>
   );
 }

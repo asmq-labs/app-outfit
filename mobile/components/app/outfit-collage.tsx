@@ -83,6 +83,8 @@ export function OutfitCollage({
 }) {
   return (
     <View
+      // A thumbnail is one target: a tap belongs to its card, not to the piece under the finger.
+      pointerEvents={size === 'thumb' ? 'none' : 'auto'}
       className={cn(
         'flex-1 flex-row gap-1 rounded-3xl border border-border bg-white',
         size === 'thumb' ? 'p-1.5' : 'p-3'

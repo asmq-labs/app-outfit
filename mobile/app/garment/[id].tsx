@@ -17,13 +17,13 @@ import {
   FORMALITY_OPTIONS,
   type Garment,
   type GarmentEdit,
-  useDeleteGarment,
   useGarmentImage,
   useGarments,
   useUpdateGarment,
   WARMTH_OPTIONS,
 } from '@/lib/garments';
 import { successFeedback } from '@/lib/haptics';
+import { useConfirmDeleteGarment } from '@/lib/outfits';
 
 function Field({ label, children }: React.PropsWithChildren<{ label: string }>) {
   return (
@@ -49,7 +49,7 @@ function GarmentForm({ garment }: { garment: Garment }) {
   const [showOriginal, setShowOriginal] = React.useState(false);
   const image = useGarmentImage(garment, { variant: showOriginal ? 'original' : undefined });
   const update = useUpdateGarment();
-  const remove = useDeleteGarment();
+  const confirmDelete = useConfirmDeleteGarment(garment);
   const [form, setForm] = React.useState<GarmentEdit>({
     name: garment.name ?? '',
     category: garment.category,
@@ -95,21 +95,6 @@ function GarmentForm({ garment }: { garment: Garment }) {
       { id: garment.id, changes: { ...form, name: form.name.trim() } },
       { onSuccess: successFeedback }
     );
-  }
-
-  function confirmDelete(): void {
-    askToConfirm({
-      title: '¿Eliminar esta prenda?',
-      body: 'Se borrará de tu armario.',
-      action: 'Eliminar',
-      onConfirm: () => {
-        setDeleting(true);
-        remove.mutate(garment.id, {
-          onSuccess: () => router.back(),
-          onError: () => setDeleting(false),
-        });
-      },
-    });
   }
 
   return (
@@ -221,7 +206,15 @@ function GarmentForm({ garment }: { garment: Garment }) {
           </Button>
         )}
 
-        <Button variant="ghost" onPress={confirmDelete}>
+        <Button
+          variant="ghost"
+          onPress={() =>
+            confirmDelete({
+              onConfirm: () => setDeleting(true),
+              onSuccess: () => router.back(),
+              onError: () => setDeleting(false),
+            })
+          }>
           <Text className="text-destructive">Eliminar prenda</Text>
         </Button>
       </ScrollView>

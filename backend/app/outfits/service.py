@@ -1,7 +1,7 @@
 import datetime as dt
 import uuid
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import ColumnElement, and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.ai.openrouter import AIError
@@ -320,6 +320,10 @@ def another(db: Session, user: User, outfit: Outfit, forecast: Forecast | None) 
     return replacement
 
 
+def _uses(garment_id: uuid.UUID) -> ColumnElement[bool]:
+    return or_(*(getattr(Outfit, f"{c.value}_id") == garment_id for c in GarmentCategory))
+
+
 def _refresh_wear(db: Session, garment_ids: set[uuid.UUID]) -> None:
     # Count and last date always come from the worn outfits, so undoing a log stays exact.
     db.flush()
@@ -333,7 +337,7 @@ def _refresh_wear(db: Session, garment_ids: set[uuid.UUID]) -> None:
                 select(Outfit).where(
                     Outfit.user_id == garment.user_id,
                     Outfit.worn_at.is_not(None),
-                    or_(*(getattr(Outfit, f"{c.value}_id") == garment_id for c in GarmentCategory)),
+                    _uses(garment_id),
                 )
             )
         ]
@@ -489,3 +493,48 @@ def get_saved_for_user(db: Session, user: User, saved_id: uuid.UUID) -> SavedOut
 def delete_saved(db: Session, saved: SavedOutfit) -> None:
     db.delete(saved)
     db.commit()
+
+
+def _empty_slot(outfit: Outfit | SavedOutfit, garment_id: uuid.UUID) -> None:
+    for category, slot in outfit.garment_ids().items():
+        if slot == garment_id:
+            setattr(outfit, f"{category.value}_id", None)
+
+
+def release_garment(db: Session, garment: Garment) -> None:
+    # A saved or upcoming outfit only makes sense whole, so none is ever left half empty.
+    kept: set[Combo] = set()
+    for saved in _saved_of(db, garment.user_id):
+        _empty_slot(saved, garment.id)
+        combo = _combo(saved.garment_ids())
+        if combo in kept or not _is_wearable(OutfitChoice(saved.garment_ids(), "")):
+            db.delete(saved)
+        else:
+            kept.add(combo)
+    upcoming = db.scalars(
+        select(Outfit).where(
+            Outfit.user_id == garment.user_id,
+            Outfit.worn_at.is_(None),
+            _uses(garment.id),
+        )
+    )
+    for outfit in upcoming:
+        _empty_slot(outfit, garment.id)
+        # A suggestion's explanation talks about the garment, so only a plan can outlive it.
+        if not (outfit.planned and outfit.is_complete):
+            db.delete(outfit)
+
+
+def forget_garment(db: Session, garment: Garment) -> None:
+    release_garment(db, garment)
+    # What was worn stays in the history, unless this was all that remained of it.
+    worn = db.scalars(
+        select(Outfit).where(
+            Outfit.user_id == garment.user_id,
+            Outfit.worn_at.is_not(None),
+            _uses(garment.id),
+        )
+    )
+    for outfit in worn:
+        if len(_combo(outfit.garment_ids())) == 1:
+            db.delete(outfit)

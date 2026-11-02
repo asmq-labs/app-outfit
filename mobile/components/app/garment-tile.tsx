@@ -6,8 +6,8 @@ import { Pressable, View } from 'react-native';
 import { Spinner } from '@/components/app/spinner';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
-import { askToConfirm } from '@/lib/confirm';
 import { type Garment, useDeleteGarment, useGarmentImage, useRetryGarment } from '@/lib/garments';
+import { useConfirmDeleteGarment } from '@/lib/outfits';
 
 const FAILURE_TEXT: Record<string, string> = {
   not_a_garment: 'No vimos una prenda',
@@ -18,19 +18,11 @@ export function GarmentTile({ garment }: { garment: Garment }) {
   const image = useGarmentImage(garment, { size: 'thumb' });
   const retry = useRetryGarment();
   const remove = useDeleteGarment();
+  const confirmDelete = useConfirmDeleteGarment(garment);
 
   function openDetail(): void {
     if (garment.status !== 'ready') return;
     router.push({ pathname: '/garment/[id]', params: { id: garment.id } });
-  }
-
-  function confirmDelete(): void {
-    askToConfirm({
-      title: '¿Eliminar esta prenda?',
-      body: 'Se borrará de tu armario.',
-      action: 'Eliminar',
-      onConfirm: () => remove.mutate(garment.id),
-    });
   }
 
   return (
@@ -38,7 +30,7 @@ export function GarmentTile({ garment }: { garment: Garment }) {
       accessibilityRole="button"
       accessibilityLabel={garment.name ?? 'Prenda en proceso'}
       onPress={openDetail}
-      onLongPress={confirmDelete}
+      onLongPress={() => confirmDelete()}
       className="flex-1 overflow-hidden rounded-xl border border-border bg-white">
       <Image
         source={image}

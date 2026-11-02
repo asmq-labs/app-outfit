@@ -4,14 +4,16 @@ import { FlatList, Pressable, View } from 'react-native';
 import { OutfitCollage } from '@/components/app/outfit-collage';
 import { Pulse } from '@/components/app/pulse';
 import { Text } from '@/components/ui/text';
-import { type SavedOutfit, useSavedOutfits } from '@/lib/outfits';
+import { type SavedOutfit, useConfirmDeleteOutfit, useSavedOutfits } from '@/lib/outfits';
 
 function SavedCard({ saved }: { saved: SavedOutfit }) {
+  const confirmDelete = useConfirmDeleteOutfit(saved.id);
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Ver outfit guardado"
       onPress={() => router.push({ pathname: '/saved/[id]', params: { id: saved.id } })}
+      onLongPress={() => confirmDelete()}
       className="aspect-[4/5] max-w-[49%] flex-1 overflow-hidden rounded-3xl active:opacity-80">
       <OutfitCollage garments={saved.garments} size="thumb" />
     </Pressable>

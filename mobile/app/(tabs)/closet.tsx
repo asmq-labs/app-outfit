@@ -144,11 +144,11 @@ export default function ClosetScreen() {
           )}
 
           {garments.length > 0 && (
-            // A horizontal ScrollView grows to fill the screen unless told not to.
+            // Left alone it grows to fill the screen, or a long list below squeezes it flat.
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              style={{ flexGrow: 0 }}
+              style={{ flexGrow: 0, flexShrink: 0 }}
               contentContainerClassName="px-4 pb-3">
               <ChoiceChips layout="wrap" options={FILTERS} selected={filter} onSelect={setFilter} />
             </ScrollView>

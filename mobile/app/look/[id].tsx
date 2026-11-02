@@ -7,7 +7,7 @@ import { LookSkeleton } from '@/components/app/skeletons';
 import { Button } from '@/components/app/button';
 import { Text } from '@/components/ui/text';
 import { ApiError } from '@/lib/api';
-import { askToConfirm } from '@/lib/confirm';
+import { askToConfirm, tellFailure } from '@/lib/confirm';
 import {
   type Inspiration,
   useDeleteInspiration,
@@ -87,7 +87,15 @@ function Look({ inspiration }: { inspiration: Inspiration }) {
           size="lg"
           disabled={wearToday.isPending}
           onPress={() =>
-            wearToday.mutate(inspiration.id, { onSuccess: () => router.dismissTo('/') })
+            wearToday.mutate(inspiration.id, {
+              onSuccess: () => router.dismissTo('/'),
+              // Missing clothes have their own message above.
+              onError: (error) => {
+                if (!(error instanceof ApiError && error.code === 'not_enough_garments')) {
+                  tellFailure();
+                }
+              },
+            })
           }>
           <Text className="font-sans-semibold">
             {wearToday.isPending ? 'Armando…' : 'Usarlo hoy'}

@@ -2,9 +2,15 @@ import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
 import { create } from 'zustand';
 
 import { api, jsonBody } from '@/lib/api';
-import { type Garment, type GarmentCategory, refreshGarments } from '@/lib/garments';
+import { askToConfirm } from '@/lib/confirm';
+import {
+  type Garment,
+  type GarmentCategory,
+  refreshGarments,
+  useDeleteGarment,
+} from '@/lib/garments';
 import type { Coords } from '@/lib/location';
-import { queryClient } from '@/lib/query';
+import { queryClient, REPORT_FAILURE } from '@/lib/query';
 
 export type Occasion = 'casual' | 'work' | 'night_out' | 'formal';
 
@@ -135,6 +141,7 @@ export function useWearOutfit(coords: Coords | null | undefined) {
       void refreshGarments();
       void queryClient.invalidateQueries({ queryKey: CALENDAR_KEY });
     },
+    meta: REPORT_FAILURE,
   });
 }
 
@@ -149,6 +156,7 @@ export function useUnwearOutfit(coords: Coords | null | undefined) {
       void refreshGarments();
       void queryClient.invalidateQueries({ queryKey: CALENDAR_KEY });
     },
+    meta: REPORT_FAILURE,
   });
 }
 
@@ -183,6 +191,7 @@ export function useDeleteOutfit() {
   return useMutation({
     mutationFn: (id: string) => api<void>(`/outfits/${id}`, { method: 'DELETE' }),
     onSuccess: refreshAfterOutfitChange,
+    meta: REPORT_FAILURE,
   });
 }
 
@@ -223,6 +232,7 @@ export function useUnsaveOutfit() {
   return useMutation({
     mutationFn: (id: string) => api<void>(`/saved-outfits/${id}`, { method: 'DELETE' }),
     onSuccess: refreshSaved,
+    meta: REPORT_FAILURE,
   });
 }
 
@@ -234,5 +244,46 @@ export function useWearSavedToday(coords: Coords | null | undefined) {
       return api<Outfit>(`/saved-outfits/${id}/use?${query}`, { method: 'POST' });
     },
     onSuccess: (outfit) => queryClient.setQueryData(todayKey(outfit.occasion, outfit.day), outfit),
+    meta: REPORT_FAILURE,
   });
+}
+
+export function useConfirmDeleteOutfit(id: string) {
+  const unsave = useUnsaveOutfit();
+  return (onDeleted?: () => void) =>
+    askToConfirm({
+      title: '¿Eliminar este outfit?',
+      body: 'Solo se borra la combinación. Tus prendas siguen en tu armario.',
+      action: 'Eliminar outfit',
+      onConfirm: () => unsave.mutate(id, { onSuccess: onDeleted }),
+    });
+}
+
+const NEEDED: GarmentCategory[] = ['top', 'bottom', 'one_piece', 'shoes'];
+
+// Says the whole truth before deleting: the garment is gone for good, and so are its saved outfits.
+export function useConfirmDeleteGarment(garment: Garment) {
+  const { data: saved = [] } = useSavedOutfits();
+  const remove = useDeleteGarment();
+
+  return (done?: { onConfirm?: () => void; onSuccess?: () => void; onError?: () => void }) => {
+    const lost = saved.filter((item) =>
+      NEEDED.some((category) => item.garments[category]?.id === garment.id)
+    ).length;
+    const also =
+      lost === 0
+        ? ''
+        : lost === 1
+          ? ' También se eliminará 1 outfit guardado que la usa.'
+          : ` También se eliminarán ${lost} outfits guardados que la usan.`;
+    askToConfirm({
+      title: garment.name ? `¿Eliminar «${garment.name}»?` : '¿Eliminar esta prenda?',
+      body: `Se borrará de tu armario y no podrás recuperarla.${also}`,
+      action: 'Eliminar prenda',
+      onConfirm: () => {
+        done?.onConfirm?.();
+        remove.mutate(garment.id, { onSuccess: done?.onSuccess, onError: done?.onError });
+      },
+    });
+  };
 }

@@ -127,3 +127,16 @@ def test_looks_stop_at_the_daily_limit(client, user, monkeypatch):
     assert upload(client, user).status_code == 202
 
     assert upload(client, user).status_code == 429
+
+
+def test_a_deleted_garment_becomes_what_the_look_is_missing(client, db, user, closet, stylist):
+    stylist["match"] = match(top=closet["top"], bottom=closet["bottom"])
+    created = upload(client, user).json()
+    jobs.run_next_job(db)
+    name = closet["top"].name
+
+    client.delete(f"/v1/garments/{closet['top'].id}", headers=user)
+
+    look = client.get(f"/v1/inspirations/{created['id']}", headers=user).json()
+    assert look["garments"]["top"] is None
+    assert {"category": "top", "name": name} in look["missing"]

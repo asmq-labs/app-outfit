@@ -4,8 +4,9 @@ import { create } from 'zustand';
 type ConfirmRequest = {
   title: string;
   body: string;
-  action: string;
-  onConfirm: () => void;
+  // Without an action the sheet only informs.
+  action?: string;
+  onConfirm?: () => void;
 };
 
 export const useConfirm = create<{ request: ConfirmRequest | null }>(() => ({ request: null }));
@@ -14,4 +15,11 @@ export const useConfirm = create<{ request: ConfirmRequest | null }>(() => ({ re
 export function askToConfirm(request: ConfirmRequest): void {
   useConfirm.setState({ request });
   router.push('/confirm');
+}
+
+export function tellFailure(): void {
+  askToConfirm({
+    title: 'No se pudo completar',
+    body: 'Revisa tu conexión e inténtalo de nuevo.',
+  });
 }

@@ -8,6 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { Icon } from '@/components/ui/icon';
+import { tellFailure } from '@/lib/confirm';
 import { selectionFeedback } from '@/lib/haptics';
 import { type Outfit, useSaveOutfit, useUnsaveOutfit } from '@/lib/outfits';
 import { THEME } from '@/lib/theme';
@@ -32,7 +33,7 @@ export function SaveHeart({ outfit }: { outfit: Pick<Outfit, 'garments' | 'saved
         withTiming(1.2, { duration: 110 }),
         withTiming(1, { duration: 140 })
       );
-      save.mutate(outfit.garments);
+      save.mutate(outfit.garments, { onError: tellFailure });
     }
   }
 

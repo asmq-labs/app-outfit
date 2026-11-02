@@ -16,7 +16,7 @@ export default function ConfirmSheet() {
   // Runs once the sheet is gone: the action may navigate, and it needs its screen back on top.
   React.useEffect(
     () => () => {
-      if (confirmed.current) useConfirm.getState().request?.onConfirm();
+      if (confirmed.current) useConfirm.getState().request?.onConfirm?.();
     },
     []
   );
@@ -30,18 +30,20 @@ export default function ConfirmSheet() {
       <Text className="text-muted-foreground">{request.body}</Text>
       <View className="mt-4 flex-row gap-3">
         <Button variant="outline" size="lg" className="flex-1" onPress={() => router.back()}>
-          <Text className="font-sans-semibold">Cancelar</Text>
+          <Text className="font-sans-semibold">{request.action ? 'Cancelar' : 'Entendido'}</Text>
         </Button>
-        <Button
-          variant="destructive"
-          size="lg"
-          className="flex-1"
-          onPress={() => {
-            confirmed.current = true;
-            router.back();
-          }}>
-          <Text className="font-sans-semibold">{request.action}</Text>
-        </Button>
+        {request.action && (
+          <Button
+            variant="destructive"
+            size="lg"
+            className="flex-1"
+            onPress={() => {
+              confirmed.current = true;
+              router.back();
+            }}>
+            <Text className="font-sans-semibold">{request.action}</Text>
+          </Button>
+        )}
       </View>
     </View>
   );
