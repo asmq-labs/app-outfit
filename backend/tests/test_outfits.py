@@ -303,6 +303,18 @@ def test_wearing_an_outfit_rests_its_top_the_next_day(client, db, user, closet, 
     assert tomorrow["garments"]["top"]["id"] != outfit["garments"]["top"]["id"]
 
 
+def test_undoing_a_wear_restores_the_outfit_and_its_garments(client, user, closet, stylist):
+    outfit = today(client, user).json()
+    client.post(f"/v1/outfits/{outfit['id']}/wear", headers=user)
+
+    undone = client.post(f"/v1/outfits/{outfit['id']}/unwear", headers=user).json()
+
+    assert undone["worn"] is False
+    assert undone["garments"]["top"]["wear_count"] == 0
+    assert undone["garments"]["top"]["last_worn_at"] is None
+    assert today(client, user).json()["id"] == outfit["id"]
+
+
 def test_deleting_a_garment_replaces_the_outfit_that_used_it(client, user, closet, stylist):
     outfit = today(client, user).json()
 
@@ -318,6 +330,7 @@ def test_outfits_are_private_to_their_owner(client, user, closet, stylist):
     stranger = auth_header(client.post("/v1/auth/guest").json())
 
     assert client.post(f"/v1/outfits/{outfit['id']}/wear", headers=stranger).status_code == 404
+    assert client.post(f"/v1/outfits/{outfit['id']}/unwear", headers=stranger).status_code == 404
     assert client.post(f"/v1/outfits/{outfit['id']}/another", headers=stranger).status_code == 404
 
 

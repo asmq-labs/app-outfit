@@ -305,6 +305,15 @@ def wear(db: Session, outfit: Outfit) -> Outfit:
     return outfit
 
 
+def unwear(db: Session, outfit: Outfit) -> Outfit:
+    if outfit.worn_at is not None:
+        outfit.worn_at = None
+        outfit.planned = outfit.explanation == PLANNED_EXPLANATION
+        _refresh_wear(db, set(_combo(outfit.garment_ids())))
+        db.commit()
+    return outfit
+
+
 def _check_wearable(
     db: Session, user: User, garment_ids: dict[GarmentCategory, uuid.UUID | None]
 ) -> None:

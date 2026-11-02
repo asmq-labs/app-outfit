@@ -162,3 +162,10 @@ def wear_outfit(
     outfit: OwnedOutfit, db: DbSession, lat: Latitude = None, lon: Longitude = None
 ) -> OutfitOut:
     return _outfit_out(db, service.wear(db, outfit), _forecast(outfit.day, lat, lon))
+
+
+@router.post("/{outfit_id}/unwear")
+def unwear_outfit(
+    outfit: OwnedOutfit, db: DbSession, lat: Latitude = None, lon: Longitude = None
+) -> OutfitOut:
+    return _outfit_out(db, service.unwear(db, outfit), _forecast(outfit.day, lat, lon))
