@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
+import { router } from 'expo-router';
 import { create } from 'zustand';
 
 import { api, jsonBody } from '@/lib/api';
@@ -12,7 +13,8 @@ import {
 import type { Coords } from '@/lib/location';
 import { queryClient, REPORT_FAILURE } from '@/lib/query';
 
-export type Occasion = 'casual' | 'work' | 'night_out' | 'formal';
+export type Occasion = 'casual' | 'work' | 'night_out' | 'formal' | 'sport';
+export type Feeling = 'good' | 'bad';
 
 export type Outfit = {
   id: string;
@@ -28,6 +30,8 @@ export type Outfit = {
   // Slots the closet could only fill with something off the occasion.
   off_occasion: GarmentCategory[];
   forecast: { min_c: number; max_c: number; rain: boolean } | null;
+  feeling: Feeling | null;
+  feeling_reasons: string[];
 };
 
 export const OCCASIONS: { value: Occasion; label: string }[] = [
@@ -35,7 +39,29 @@ export const OCCASIONS: { value: Occasion; label: string }[] = [
   { value: 'work', label: 'Trabajo' },
   { value: 'night_out', label: 'Salir' },
   { value: 'formal', label: 'Formal' },
+  { value: 'sport', label: 'Deporte' },
 ];
+
+// Must match REASONS in backend/app/outfits/service.py. Words that read the same for anyone.
+export const FEELING_REASONS: Record<Feeling, { value: string; label: string }[]> = {
+  good: [
+    { value: 'comfortable', label: 'Comodidad' },
+    { value: 'looks_good', label: 'Cómo me veo' },
+    { value: 'confident', label: 'Me dio seguridad' },
+    { value: 'right_occasion', label: 'Ideal para la ocasión' },
+    { value: 'right_weather', label: 'Ideal para el clima' },
+    { value: 'colors', label: 'Los colores' },
+  ],
+  bad: [
+    { value: 'uncomfortable', label: 'Poca comodidad' },
+    { value: 'not_my_style', label: 'No es mi estilo' },
+    { value: 'bad_match', label: 'No combina' },
+    { value: 'wrong_occasion', label: 'No era para la ocasión' },
+    { value: 'too_hot', label: 'Mucho calor' },
+    { value: 'too_cold', label: 'Mucho frío' },
+    { value: 'bad_fit', label: 'No me queda bien' },
+  ],
+};
 
 export function defaultOccasion(now = new Date()): Occasion {
   const day = now.getDay();
@@ -160,6 +186,48 @@ export function useUnwearOutfit(coords: Coords | null | undefined) {
   });
 }
 
+export function openFeeling(outfit: Outfit, feeling: Feeling, replace = false): void {
+  router.push({
+    pathname: '/outfit-feeling',
+    params: {
+      id: outfit.id,
+      feeling,
+      // Reasons only carry over when the sentiment stays the same.
+      reasons: JSON.stringify(outfit.feeling === feeling ? outfit.feeling_reasons : []),
+      rated: outfit.feeling ? '1' : '0',
+      replace: replace ? '1' : '0',
+    },
+  });
+}
+
+export function useSetFeeling(coords: Coords | null | undefined) {
+  return useMutation({
+    mutationFn: async (ask: {
+      id: string;
+      feeling: Feeling | null;
+      reasons: string[];
+      replace: boolean;
+    }) => {
+      const query = coordsQuery(coords).slice(1);
+      const rated = await api<Outfit>(
+        `/outfits/${ask.id}/feeling?${query}`,
+        jsonBody('PUT', { feeling: ask.feeling, reasons: ask.reasons })
+      );
+      if (!ask.replace) return { outfit: rated, replaced: false };
+      // The opinion is already kept, so running out of outfits only leaves this one on screen.
+      const next = await api<Outfit>(`/outfits/${ask.id}/another?${query}`, {
+        method: 'POST',
+      }).catch(() => null);
+      return { outfit: next ?? rated, replaced: Boolean(next) };
+    },
+    onSuccess: ({ outfit, replaced }) => {
+      if (replaced) queryClient.setQueryData(todayKey(outfit.occasion, outfit.day), outfit);
+      else void queryClient.invalidateQueries({ queryKey: ['outfit'] });
+      void queryClient.invalidateQueries({ queryKey: CALENDAR_KEY });
+    },
+  });
+}
+
 export function useCalendar(start: string, end: string) {
   return useQuery({
     queryKey: [...CALENDAR_KEY, start, end],
@@ -184,6 +252,46 @@ export function useCreateOutfit() {
   return useMutation({
     mutationFn: (draft: OutfitDraft) => api<Outfit>('/outfits', jsonBody('POST', draft)),
     onSuccess: refreshAfterOutfitChange,
+  });
+}
+
+export function useSwapOutfit(coords: Coords | null | undefined) {
+  return useMutation({
+    mutationFn: ({ id, garments }: { id: string; garments: Outfit['garments'] }) =>
+      api<Outfit>(
+        `/outfits/${id}/garments?${coordsQuery(coords).slice(1)}`,
+        jsonBody('PUT', { garments: garmentIds(garments) })
+      ),
+    onSuccess: (outfit) => {
+      queryClient.setQueryData(todayKey(outfit.occasion, outfit.day), outfit);
+      void queryClient.invalidateQueries({ queryKey: CALENDAR_KEY });
+    },
+  });
+}
+
+export type BuilderMode = 'wear' | 'plan' | 'save' | 'swap' | 'edit-saved';
+
+// Changing one piece happens in the same screen as building an outfit from zero.
+export function openSwap(outfit: Outfit, slot?: GarmentCategory | null): void {
+  router.push({
+    pathname: '/outfit/new',
+    params: {
+      mode: 'swap',
+      id: outfit.id,
+      pieces: JSON.stringify(garmentIds(outfit.garments)),
+      ...(slot ? { slot } : {}),
+    },
+  });
+}
+
+export function openSavedSwap(saved: SavedOutfit): void {
+  router.push({
+    pathname: '/outfit/new',
+    params: {
+      mode: 'edit-saved',
+      id: saved.id,
+      pieces: JSON.stringify(garmentIds(saved.garments)),
+    },
   });
 }
 
@@ -224,6 +332,14 @@ export function useSaveOutfit() {
   return useMutation({
     mutationFn: (garments: Outfit['garments']) =>
       api<SavedOutfit>('/saved-outfits', jsonBody('POST', { garments: garmentIds(garments) })),
+    onSuccess: refreshSaved,
+  });
+}
+
+export function useUpdateSaved() {
+  return useMutation({
+    mutationFn: ({ id, garments }: { id: string; garments: Outfit['garments'] }) =>
+      api<SavedOutfit>(`/saved-outfits/${id}`, jsonBody('PUT', { garments: garmentIds(garments) })),
     onSuccess: refreshSaved,
   });
 }

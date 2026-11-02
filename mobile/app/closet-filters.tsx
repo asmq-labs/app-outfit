@@ -93,7 +93,7 @@ export default function ClosetFiltersSheet() {
           />
         </Group>
 
-        <Group label="Formalidad">
+        <Group label="Estilo">
           <ChoiceChips
             layout="wrap"
             options={FORMALITY_OPTIONS}

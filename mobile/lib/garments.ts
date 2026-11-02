@@ -17,7 +17,7 @@ export type Garment = {
   name: string | null;
   color: string | null;
   warmth: 'light' | 'medium' | 'warm' | null;
-  formality: 'casual' | 'smart' | 'formal' | null;
+  formality: 'casual' | 'smart' | 'formal' | 'sport' | null;
   brand: string | null;
   size: string | null;
   notes: string | null;
@@ -58,6 +58,7 @@ export const FORMALITY_OPTIONS = [
   { value: 'casual', label: 'Casual' },
   { value: 'smart', label: 'Elegante' },
   { value: 'formal', label: 'Formal' },
+  { value: 'sport', label: 'Deportivo' },
 ] as const;
 
 const GARMENTS_KEY = ['garments'];

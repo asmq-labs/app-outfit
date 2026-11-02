@@ -158,7 +158,7 @@ function GarmentForm({ garment }: { garment: Garment }) {
           />
         </Field>
 
-        <Field label="Formalidad">
+        <Field label="Estilo">
           <ChoiceChips
             options={FORMALITY_OPTIONS}
             selected={form.formality}

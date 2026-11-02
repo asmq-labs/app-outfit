@@ -3,7 +3,12 @@ import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
-import { type Garment, type ImageSize, useGarmentImage } from '@/lib/garments';
+import {
+  type Garment,
+  type GarmentCategory,
+  type ImageSize,
+  useGarmentImage,
+} from '@/lib/garments';
 import type { Outfit } from '@/lib/outfits';
 import { cn } from '@/lib/utils';
 
@@ -11,8 +16,16 @@ import { cn } from '@/lib/utils';
 const STAGGER_MS = 40;
 
 type Slot = { garment: Garment; weight: number; order: number; size: ImageSize; reveal: boolean };
+type PiecePress = (category: GarmentCategory) => void;
 
-function Piece({ garment, weight, order, size, reveal }: Slot) {
+function Piece({
+  garment,
+  weight,
+  order,
+  size,
+  reveal,
+  onPiecePress,
+}: Slot & { onPiecePress?: PiecePress }) {
   const image = useGarmentImage(garment, { size });
   return (
     <Animated.View
@@ -21,18 +34,22 @@ function Piece({ garment, weight, order, size, reveal }: Slot) {
       <Pressable
         accessibilityLabel={garment.name ?? undefined}
         style={{ flex: 1 }}
-        onPress={() => router.push({ pathname: '/garment/[id]', params: { id: garment.id } })}>
+        onPress={() =>
+          onPiecePress && garment.category
+            ? onPiecePress(garment.category)
+            : router.push({ pathname: '/garment/[id]', params: { id: garment.id } })
+        }>
         <Image source={image} contentFit="contain" style={{ flex: 1 }} transition={150} />
       </Pressable>
     </Animated.View>
   );
 }
 
-function Column({ slots }: { slots: Slot[] }) {
+function Column({ slots, onPiecePress }: { slots: Slot[]; onPiecePress?: PiecePress }) {
   return (
     <View className="flex-1 gap-1">
       {slots.map((slot) => (
-        <Piece key={slot.garment.id} {...slot} />
+        <Piece key={slot.garment.id} {...slot} onPiecePress={onPiecePress} />
       ))}
     </View>
   );
@@ -75,11 +92,14 @@ export function OutfitCollage({
   garments,
   size = 'full',
   reveal = false,
+  onPiecePress,
 }: {
   garments: Outfit['garments'];
   size?: ImageSize;
   // Only Hoy lays the pieces out: lists and detail screens just show them.
   reveal?: boolean;
+  // Replaces opening the garment, where tapping a piece means choosing another one.
+  onPiecePress?: PiecePress;
 }) {
   return (
     <View
@@ -92,7 +112,7 @@ export function OutfitCollage({
       {layout(garments, size, reveal)
         .filter((column) => column.length > 0)
         .map((column) => (
-          <Column key={column[0].garment.id} slots={column} />
+          <Column key={column[0].garment.id} slots={column} onPiecePress={onPiecePress} />
         ))}
     </View>
   );

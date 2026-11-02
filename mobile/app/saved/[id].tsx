@@ -7,6 +7,7 @@ import { Button } from '@/components/app/button';
 import { Text } from '@/components/ui/text';
 import { useCoords } from '@/lib/location';
 import {
+  openSavedSwap,
   type SavedOutfit,
   useConfirmDeleteOutfit,
   useSavedOutfits,
@@ -29,6 +30,9 @@ function Saved({ saved }: { saved: SavedOutfit }) {
         <Text className="font-sans-semibold">
           {wearToday.isPending ? 'Preparando…' : 'Usarlo hoy'}
         </Text>
+      </Button>
+      <Button variant="outline" size="lg" onPress={() => openSavedSwap(saved)}>
+        <Text className="font-sans-semibold">Cambiar prenda</Text>
       </Button>
       <Button variant="ghost" onPress={() => confirmDelete(() => router.back())}>
         <Text className="text-destructive">Eliminar outfit</Text>

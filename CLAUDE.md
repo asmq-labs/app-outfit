@@ -84,6 +84,13 @@ CI=1 npx expo export --platform android --output-dir <carpeta temporal>   # prue
   pedido (`/outfit-request`) añade ocasión e indicaciones opcionales en lenguaje natural, desde Hoy
   o desde una prenda, y "Tu estilo" guarda gustos en texto libre: orientan al LLM, nunca cambian
   las reglas del código. Sin preguntas ni género obligatorios al empezar.
+- Armar a mano y cambiar una prenda usan la misma pantalla (`/outfit/new`). Tocar una pieza en Hoy
+  la cambia; en el resto de la app abre la prenda. Cambiar no llama al LLM.
+- Opiniones: pulgar arriba o abajo con motivos opcionales, después de usarlo (y a la mañana
+  siguiente) o con el pulgar abajo sobre una sugerencia. Orientan al LLM; el código nunca repite una
+  combinación rechazada mientras exista otra. El corazón es otra cosa: guardar.
+- Ocasión Deporte: usa prendas de formalidad `sport`. Zapatos y chaquetas deportivos también
+  sirven en Casual; el resto de la ropa deportiva, no.
 - "Me lo pongo" registra lo usado y evita repetir con un descanso según el tipo de prenda. Sin
   lavandería. Abrigo por niveles (ligero, medio, abrigado), no por temporada.
 - Login solo con Google y Apple. Modo claro y oscuro según el sistema.

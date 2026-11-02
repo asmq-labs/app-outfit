@@ -102,6 +102,7 @@ export default function RootLayout() {
             <Stack.Screen name="add-options" options={SHEET} />
             <Stack.Screen name="closet-filters" options={SHEET} />
             <Stack.Screen name="confirm" options={SHEET} />
+            <Stack.Screen name="outfit-feeling" options={SHEET} />
             <Stack.Screen name="outfit-request" options={SHEET} />
             <Stack.Screen name="style-profile" options={SHEET} />
           </Stack>

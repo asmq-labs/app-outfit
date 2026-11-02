@@ -34,6 +34,20 @@ NEAREST_FORMALITY: dict[Occasion, set[Formality]] = {
     Occasion.SPORT: {Formality.CASUAL},
 }
 
+# Sneakers and a windbreaker work on a normal day; gym shorts and a sports bra do not.
+EVERYDAY_SPORT = {GarmentCategory.SHOES, GarmentCategory.OUTERWEAR}
+
+
+def suits_occasion(garment: Garment, occasion: Occasion) -> bool:
+    if (
+        occasion == Occasion.CASUAL
+        and garment.formality == Formality.SPORT
+        and garment.category in EVERYDAY_SPORT
+    ):
+        return True
+    return garment.formality in FORMALITY_BY_OCCASION[occasion]
+
+
 HOT_FROM_C = 25
 COLD_BELOW_C = 15
 LAYER_BELOW_C = 17
@@ -96,13 +110,12 @@ def select_candidates(
     garments: list[Garment], occasion: Occasion, forecast: Forecast | None, day: dt.date
 ) -> Candidates:
     warmth = _suitable_warmth(forecast)
-    formality = FORMALITY_BY_OCCASION[occasion]
 
     def fits_weather(garment: Garment) -> bool:
         return garment.category not in WEATHER_SENSITIVE or garment.warmth in warmth
 
     def fits_occasion(garment: Garment) -> bool:
-        return garment.formality in formality
+        return suits_occasion(garment, occasion)
 
     def nearly_fits_occasion(garment: Garment) -> bool:
         return garment.formality in NEAREST_FORMALITY[occasion]

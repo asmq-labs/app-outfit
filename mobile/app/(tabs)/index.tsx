@@ -6,6 +6,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { ChoiceChips } from '@/components/app/choice-chips';
 import { FirstOutfitChecklist } from '@/components/app/first-outfit-checklist';
+import { DislikeButton, FeelingRow, YesterdayFeeling } from '@/components/app/outfit-feeling';
 import { OutfitCollage } from '@/components/app/outfit-collage';
 import { OutfitTransition } from '@/components/app/outfit-transition';
 import { Pulse } from '@/components/app/pulse';
@@ -21,7 +22,9 @@ import { type Garment, type GarmentCategory, useGarments } from '@/lib/garments'
 import { successFeedback, tapFeedback } from '@/lib/haptics';
 import { useCoords } from '@/lib/location';
 import {
+  localDay,
   OCCASIONS,
+  openSwap,
   type Outfit,
   retryFailedOutfits,
   useAnotherOutfit,
@@ -107,11 +110,25 @@ export default function TodayScreen() {
 
         {outfit ? (
           <>
+            <YesterdayFeeling />
             <OutfitTransition dimmed={another.isPending || switching}>
               <View className="flex-1">
                 {/* A new outfit is laid out whole, even when it shares pieces with the last one. */}
-                <OutfitCollage key={outfit.id} garments={outfit.garments} reveal />
+                <OutfitCollage
+                  key={outfit.id}
+                  garments={outfit.garments}
+                  reveal
+                  // Today's question is "what else could I wear", more than "what is this piece".
+                  onPiecePress={
+                    outfit.worn
+                      ? undefined
+                      : (slot) => {
+                          if (!busy) openSwap(outfit, slot);
+                        }
+                  }
+                />
                 <SaveHeart outfit={outfit} />
+                {!outfit.worn && <DislikeButton outfit={outfit} disabled={busy} />}
               </View>
 
               <Animated.View key={outfit.id} entering={FadeIn.duration(200)}>
@@ -183,15 +200,34 @@ export default function TodayScreen() {
                 </Button>
               </View>
             )}
-            {!outfit.worn && (
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={busy}
-                className="-mb-2 -mt-2 self-center"
-                onPress={() => router.push('/outfit-request')}>
-                <Text className="font-sans-medium text-muted-foreground">Pedir algo distinto</Text>
-              </Button>
+            {outfit.worn ? (
+              <FeelingRow outfit={outfit} />
+            ) : (
+              <View className="-mb-2 -mt-2 flex-row flex-wrap justify-center">
+                <Button variant="ghost" size="sm" disabled={busy} onPress={() => openSwap(outfit)}>
+                  <Text className="font-sans-medium text-muted-foreground">Cambiar prenda</Text>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/outfit/new',
+                      params: { mode: 'plan', day: localDay(), occasion },
+                    })
+                  }>
+                  <Text className="font-sans-medium text-muted-foreground">Armarlo yo</Text>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  accessibilityLabel="Pedir algo distinto"
+                  onPress={() => router.push('/outfit-request')}>
+                  <Text className="font-sans-medium text-muted-foreground">Pedir algo</Text>
+                </Button>
+              </View>
             )}
           </>
         ) : needsGarments ? (

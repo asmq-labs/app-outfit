@@ -12,6 +12,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 
 import { ChoiceChips } from '@/components/app/choice-chips';
 import { OutfitCollage } from '@/components/app/outfit-collage';
+import { FeelingRow } from '@/components/app/outfit-feeling';
 import { Pulse } from '@/components/app/pulse';
 import { ScreenHeader } from '@/components/app/screen-header';
 import { Spinner } from '@/components/app/spinner';
@@ -26,6 +27,7 @@ import {
   garmentIds,
   localDay,
   OCCASIONS,
+  openSwap,
   type Outfit,
   useAnotherOutfit,
   useCalendar,
@@ -167,6 +169,12 @@ function DayOutfit({ outfit }: { outfit: Outfit }) {
           Algunas prendas de este día ya no están en tu armario.
         </Text>
       )}
+      {outfit.worn && <FeelingRow outfit={outfit} />}
+      {outfit.planned && (
+        <Button variant="ghost" onPress={() => openSwap(outfit)}>
+          <Text className="font-sans-medium text-muted-foreground">Cambiar prenda</Text>
+        </Button>
+      )}
     </View>
   );
 }
@@ -221,6 +229,12 @@ function DaySuggestion({ day }: { day: string }) {
               </Text>
             </Button>
           </View>
+          <Button
+            variant="ghost"
+            disabled={another.isPending || plan.isPending}
+            onPress={() => openSwap(outfit)}>
+            <Text className="font-sans-medium text-muted-foreground">Cambiar prenda</Text>
+          </Button>
         </>
       ) : suggestion.isError ? (
         <Text className="text-center text-muted-foreground">

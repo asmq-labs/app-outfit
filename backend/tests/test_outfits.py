@@ -67,6 +67,21 @@ def test_sport_uses_sport_clothes_and_other_occasions_leave_them_out():
     assert casual.by_category[GarmentCategory.BOTTOM] == [jeans]
 
 
+def test_a_casual_day_can_use_sport_shoes_and_jackets_but_not_gym_clothes():
+    sneakers = garment(GarmentCategory.SHOES, formality=Formality.SPORT)
+    windbreaker = garment(GarmentCategory.OUTERWEAR, formality=Formality.SPORT)
+    gym_top = garment(GarmentCategory.TOP, formality=Formality.SPORT)
+    tee = garment(GarmentCategory.TOP, formality=Formality.CASUAL)
+
+    candidates = select_candidates(
+        [sneakers, windbreaker, gym_top, tee], Occasion.CASUAL, MILD, TODAY
+    )
+
+    assert candidates.by_category[GarmentCategory.SHOES] == [sneakers]
+    assert candidates.by_category[GarmentCategory.OUTERWEAR] == [windbreaker]
+    assert candidates.by_category[GarmentCategory.TOP] == [tee]
+
+
 def test_sport_without_sport_clothes_prefers_casual_over_dress_pieces():
     sneakers = garment(GarmentCategory.SHOES, formality=Formality.CASUAL)
     dress_shoes = garment(GarmentCategory.SHOES, formality=Formality.FORMAL)
