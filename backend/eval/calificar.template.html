@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calificar outfits</title>
+<style>
+  body { font: 16px/1.45 system-ui, sans-serif; margin: 0 auto; max-width: 720px; padding: 16px; background: #f5f5f4; color: #171717; }
+  .card { background: #fff; border-radius: 16px; padding: 16px; margin: 16px 0; }
+  .label { font-weight: 600; }
+  .images { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .images img { width: 130px; height: 130px; object-fit: contain; }
+  .text { font-style: italic; margin: 8px 0 12px; }
+  button { font: inherit; padding: 10px 16px; border-radius: 999px; border: 1px solid #bbb; background: #fff; cursor: pointer; margin-right: 6px; }
+  button.on { background: #171717; color: #fff; border-color: #171717; }
+  label { display: block; margin-top: 12px; }
+  #bar { position: sticky; bottom: 0; background: #f5f5f4; padding: 12px 0; }
+</style>
+</head>
+<body>
+<h1>¿Te lo pondrías?</h1>
+<p>Califica cada outfit para la situación indicada. Las respuestas quedan guardadas en este navegador. Al terminar, descarga el archivo.</p>
+<div id="cards"></div>
+<div id="bar"><strong id="count"></strong> <button id="save">Descargar resultados</button></div>
+<script>
+const CARDS = __CARDS__;
+const KEY = 'outfit-eval';
+const OPTIONS = [['si', 'Sí'], ['maso', 'Más o menos'], ['no', 'No']];
+let answers = {};
+try { answers = JSON.parse(localStorage.getItem(KEY)) || {}; } catch {}
+
+function persist() {
+  try { localStorage.setItem(KEY, JSON.stringify(answers)); } catch {}
+  const done = CARDS.filter((c) => answers[c.id]?.wear).length;
+  document.getElementById('count').textContent = `${done} de ${CARDS.length}`;
+}
+
+function render(card) {
+  const box = document.createElement('section');
+  box.className = 'card';
+  const label = Object.assign(document.createElement('div'), { className: 'label', textContent: card.label });
+  const images = Object.assign(document.createElement('div'), { className: 'images' });
+  card.images.forEach((src) => images.append(Object.assign(document.createElement('img'), { src, alt: '' })));
+  const text = Object.assign(document.createElement('p'), { className: 'text', textContent: card.explanation });
+  const buttons = document.createElement('div');
+  OPTIONS.forEach(([value, name]) => {
+    const button = Object.assign(document.createElement('button'), { textContent: name });
+    button.classList.toggle('on', answers[card.id]?.wear === value);
+    button.onclick = () => {
+      answers[card.id] = { ...answers[card.id], wear: value };
+      [...buttons.children].forEach((b) => b.classList.toggle('on', b === button));
+      persist();
+    };
+    buttons.append(button);
+  });
+  const bad = document.createElement('label');
+  const check = Object.assign(document.createElement('input'), { type: 'checkbox', checked: !!answers[card.id]?.badText });
+  check.onchange = () => {
+    answers[card.id] = { ...answers[card.id], badText: check.checked };
+    persist();
+  };
+  bad.append(check, ' La explicación está mal o inventa algo');
+  box.append(label, images, text, buttons, bad);
+  return box;
+}
+
+CARDS.forEach((card) => document.getElementById('cards').append(render(card)));
+persist();
+document.getElementById('save').onclick = () => {
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([JSON.stringify(answers)], { type: 'application/json' }));
+  link.download = 'resultados.json';
+  link.click();
+};
+</script>
+</body>
+</html>

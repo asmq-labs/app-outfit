@@ -227,6 +227,7 @@ def add_to_closet(db: Session, storage: Storage, user: User, keys: list[str]) ->
             color=color.forms[0],
             warmth=shape.warmth,
             formality=shape.formality,
+            style_notes=shape.description,
             original_path=path,
             image_path=path,
         )

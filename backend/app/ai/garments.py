@@ -4,6 +4,13 @@ from app.ai import openrouter
 from app.config import get_settings
 from app.models import Formality, GarmentCategory, Warmth
 
+STYLE_NOTES_RULE = (
+    "what a stylist would notice, as one short English phrase under 25 words: fabric and texture, "
+    "fit or cut, pattern or print, and visual weight, e.g. 'waffle-knit cotton, relaxed boxy fit, "
+    "solid, understated' or 'distressed denim, slim, rugged'. Only what is visible; if the fit "
+    "cannot be seen, leave it out."
+)
+
 ANALYZE_PROMPT = (
     "You catalog clothes for a virtual closet app. Look at the photo and list every distinct "
     "clothing item, pair of shoes or wearable accessory its owner wants to catalog. Usually "
@@ -22,6 +29,7 @@ ANALYZE_PROMPT = (
     "- color: the dominant color in Spanish, one or two words, e.g. 'azul marino'.\n"
     "- warmth: light (hot weather), medium, or warm (cold weather).\n"
     "- formality: casual, smart (smart casual, office) or formal.\n"
+    f"- style_notes: {STYLE_NOTES_RULE}\n"
     "- description: a short English phrase that tells this item apart from the others in the "
     "photo by its look and position, e.g. 'the grey t-shirt with a logo, on the left'."
 )
@@ -34,9 +42,10 @@ ITEM_SCHEMA = {
         "color": {"type": "string"},
         "warmth": {"type": "string", "enum": [w.value for w in Warmth]},
         "formality": {"type": "string", "enum": [f.value for f in Formality]},
+        "style_notes": {"type": "string"},
         "description": {"type": "string"},
     },
-    "required": ["category", "name", "color", "warmth", "formality", "description"],
+    "required": ["category", "name", "color", "warmth", "formality", "style_notes", "description"],
     "additionalProperties": False,
 }
 
@@ -86,6 +95,7 @@ class GarmentAnalysis:
     formality: Formality
     # Tells this item apart when the photo shows several.
     description: str
+    style_notes: str | None = None
 
 
 def analizar_prenda(photo: bytes) -> list[GarmentAnalysis]:
@@ -101,11 +111,28 @@ def analizar_prenda(photo: bytes) -> list[GarmentAnalysis]:
                 warmth=Warmth(item["warmth"]),
                 formality=Formality(item["formality"]),
                 description=str(item["description"])[:200],
+                style_notes=str(item["style_notes"])[:200],
             )
             for item in data["items"]
         ]
     except (KeyError, TypeError, ValueError) as exc:
         raise openrouter.AIError(f"invalid garment analysis: {data}") from exc
+
+
+def analizar_estilo(image: bytes) -> str:
+    # For garments catalogued before style notes existed; their clean image is enough.
+    prompt = f"This image shows one clothing item. Return style_notes: {STYLE_NOTES_RULE}"
+    schema = {
+        "type": "object",
+        "properties": {"style_notes": {"type": "string"}},
+        "required": ["style_notes"],
+        "additionalProperties": False,
+    }
+    data = openrouter.chat_json(get_settings().vision_model, prompt, schema, image=image)
+    try:
+        return str(data["style_notes"])[:200]
+    except KeyError as exc:
+        raise openrouter.AIError(f"invalid style notes: {data}") from exc
 
 
 def recrear_prenda(photo: bytes, focus: str | None = None) -> bytes:

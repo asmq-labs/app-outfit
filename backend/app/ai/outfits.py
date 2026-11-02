@@ -17,8 +17,9 @@ OCCASION_DESCRIPTIONS = {
 
 SLOTS = [category.value for category in GarmentCategory]
 
-PROMPT = """You are a personal stylist. Build {count} different outfits for {occasion} using ONLY \
-the garments listed below, which the person already owns.
+PROMPT = """You are an experienced personal stylist. Build {count} different outfits for \
+{occasion} using ONLY the garments listed below, which the person already owns. List them from \
+best to worst: the first one is the one the person will see.
 
 Weather today: {weather}
 
@@ -29,15 +30,28 @@ Rules:
 - {outerwear_rule}
 - An accessory is optional, at most one.
 - Use each garment only in the slot of its own category and refer to it by its "ref".
-- Prefer combinations whose colors and formality work well together.
 - The outfits must differ from each other in their top, bottom or one_piece.
 - Do not repeat any of these combinations already shown today: {seen}
-- If fewer than {count} good outfits are possible, return fewer.
-- "explanation": one short sentence, at most 20 words, in neutral Latin American Spanish, \
-addressing the person as "tú", saying why the outfit works today. Talk about the outfit, never \
-describe the person: no adjectives or participles about them such as "cómodo", "protegida" or \
-"abrigado"; use verbs instead ("te protege de la lluvia", "te mantiene a gusto"). No emojis, no \
-garment refs. Mention only garments that are in that outfit."""
+- If fewer than {count} good outfits are possible, return fewer. Never pad with a weak one.
+
+How to judge an outfit, using each garment's color, formality and style_notes:
+- Formality: every piece belongs at the same level. Dress shoes do not go with a graphic t-shirt.
+- Color: anchor it on neutrals (black, white, grey, navy, beige, brown, olive, denim). Look for a \
+clear contrast of light and dark, and at most one strong color.
+- One protagonist: at most one piece that draws the eye (a print, logo, bold color or statement \
+texture). The rest stays quiet, so two loud pieces never go together.
+- Texture and weight: pair pieces of similar visual weight. Rugged goes with rugged, refined with \
+refined; a delicate fabric next to a heavy one needs a clear reason.
+- Proportion: when style_notes mention fit, balance a relaxed piece with a slimmer or straight one.
+- Shoes finish the outfit: they match its formality and ideally echo a color already in it.
+
+"explanation": one short sentence, at most 20 words, in neutral Latin American Spanish, \
+addressing the person as "tú". Say the specific reason these pieces work together, naming colors \
+or textures, like "El beige ilumina y el verde oliva da contraste sin llamar la atención". Mention \
+the weather only when it decided the choice. No empty praise like "un estilo ideal". Talk about \
+the outfit, never describe the person: no adjectives or participles about them such as "cómodo", \
+"protegida" or "abrigado"; use verbs instead ("te protege de la lluvia", "te mantiene a gusto"). \
+No emojis, no garment refs. Mention only garments that are in that outfit."""
 
 _SLOT_SCHEMA = {"type": ["string", "null"]}
 SCHEMA = {
@@ -82,6 +96,7 @@ def describe_garment(ref: str, garment: Garment) -> dict[str, str | None]:
         "color": garment.color,
         "warmth": garment.warmth.value if garment.warmth else None,
         "formality": garment.formality.value if garment.formality else None,
+        "style_notes": garment.style_notes,
     }
 
 

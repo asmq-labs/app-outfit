@@ -25,3 +25,5 @@ image_spike/photos/*.jpg
 
 # Claude Code settings for this machine only
 .claude/settings.local.json
+
+backend/eval/out/
