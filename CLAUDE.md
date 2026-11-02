@@ -15,7 +15,7 @@ en `Desarrollo aplicaciones/` y sigue su `RECUPERACION.md` para configurar este 
 Monorepo: `backend/` (API y worker), `mobile/` (app), `docker-compose.yml` (entorno local) e
 `image_spike/` (pruebas de modelos de imagen).
 
-- **Móvil:** React Native + Expo (SDK 57) con TypeScript, Expo Router, NativeWind, React Native
+- **Móvil:** React Native + Expo (SDK 58) con TypeScript, Expo Router, NativeWind, React Native
   Reusables (`components/ui/`), TanStack Query + Zustand. Se prueba en Android con Expo Go; iOS
   se compila con EAS al final.
 - **Backend:** Python + FastAPI, PostgreSQL en Docker Compose, SQLAlchemy + Alembic, uv.

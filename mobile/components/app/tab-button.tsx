@@ -29,7 +29,7 @@ export function TabButton({
   return (
     <Pressable
       {...rest}
-      android_ripple={null}
+      android_ripple={undefined}
       style={{ flex: 1 }}
       onPressIn={(event) => {
         scale.value = withTiming(0.86, { duration: 90 });
